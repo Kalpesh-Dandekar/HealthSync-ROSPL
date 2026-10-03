@@ -49,7 +49,7 @@ export function CareNetworkPage({ authorName: _authorName, authorRole }: { autho
   };
 
   const submit = async () => {
-    if (!draft.trim()) return;
+    if (!draft.trim() || (authorRole !== "patient" && !selectedPatientId)) return;
     try {
       await roleDataApi.addNote(draft.trim(), selectedPatientId || undefined);
       setDraft("");
@@ -64,7 +64,11 @@ export function CareNetworkPage({ authorName: _authorName, authorRole }: { autho
   };
 
   const selected = connections.find((connection) => connection.patient?.id === selectedPatientId)?.patient;
-  const displayName = selected?.name || patient.name || "Patient";
+  const selectedName = typeof selected?.name === "string" ? selected.name.trim() : "";
+  const patientName = typeof patient.name === "string" ? patient.name.trim() : "";
+  const displayName = authorRole === "doctor" ? selectedName : selectedName || patientName || "Patient";
+  const hasValidNoteContext = authorRole !== "doctor" || Boolean(selectedPatientId && selectedName);
+  const noteActionDisabled = (authorRole !== "patient" && !selectedPatientId) || !hasValidNoteContext;
   const patientClass = authorRole === "patient" ? "patient-workspace-page patient-care-network" : authorRole === "doctor" ? "doctor-shared-page doctor-care-network" : "";
 
   return (
@@ -108,9 +112,9 @@ export function CareNetworkPage({ authorName: _authorName, authorRole }: { autho
       </Card>
 
       <Card className="care-network__notes">
-        <CardHeader title={`Shared notes · ${displayName}`} action={<span className="care-network__icon"><MessageSquareText /></span>} />
-        <textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} placeholder="Share an observation, question, or update..." className="w-full resize-none rounded-xl border border-paper-200 bg-paper-50 p-3 text-sm text-charcoal-900 focus:border-ink-700 focus:outline-none" />
-        <div className="mt-3 flex justify-end"><button onClick={submit} disabled={authorRole !== "patient" && !selectedPatientId} className="flex items-center gap-2 rounded-lg bg-ink-800 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"><Send className="h-3.5 w-3.5" />Post note</button></div>
+        <CardHeader title={displayName ? `Shared notes · ${displayName}` : "Shared notes"} subtitle={!hasValidNoteContext ? "Select a connected patient to view or share care-team notes." : undefined} action={<span className="care-network__icon"><MessageSquareText /></span>} />
+        <textarea value={draft} onChange={(event) => setDraft(event.target.value)} disabled={!hasValidNoteContext} rows={3} placeholder={hasValidNoteContext ? "Share an observation, question, or update..." : "Select a connected patient to begin"} className="w-full resize-none rounded-xl border border-paper-200 bg-paper-50 p-3 text-sm text-charcoal-900 focus:border-ink-700 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+        <div className="mt-3 flex justify-end"><button onClick={submit} disabled={noteActionDisabled} className="flex items-center gap-2 rounded-lg bg-ink-800 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"><Send className="h-3.5 w-3.5" />Post note</button></div>
         <div className="mt-5 space-y-3">
           {notes.length === 0 && <p className="text-sm text-charcoal-500">No notes for this patient yet.</p>}
           {notes.map((note) => <div key={note.id} className="rounded-xl border border-paper-200 bg-paper-50 p-4"><div className="flex items-center justify-between"><p className="text-sm font-semibold text-charcoal-900">{note.author}</p><span className="text-xs text-charcoal-500">{new Date(note.timestamp).toLocaleString()}</span></div><Badge tone={note.authorRole === "doctor" ? "ink" : "neutral"}>{note.authorRole}</Badge><p className="mt-2 text-sm leading-relaxed text-charcoal-700">{note.note}</p></div>)}

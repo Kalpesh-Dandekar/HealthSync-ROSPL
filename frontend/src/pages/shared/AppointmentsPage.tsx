@@ -44,6 +44,8 @@ export function AppointmentsPage({ role }: { role: UserRole }) {
 
   const canBook = role === "patient" || role === "caregiver";
   const canCancel = role !== "doctor";
+  const patientName = typeof patient.name === "string" ? patient.name.trim() : "";
+  const hasNamedPatientContext = patientName.length > 0 && patientName.toLowerCase() !== "patient";
 
   const submit = () => {
     if (!reason.trim() || !date.trim() || !time.trim()) return;
@@ -83,7 +85,9 @@ export function AppointmentsPage({ role }: { role: UserRole }) {
           </h1>
           <p className="mt-1 text-sm text-charcoal-500">
             {role === "doctor"
-              ? `Scheduled visits and follow-ups for ${patient.name}.`
+              ? hasNamedPatientContext
+                ? `Scheduled visits and follow-ups for ${patientName}.`
+                : "Manage scheduled visits and follow-ups across your connected patients."
               : "Visits, follow-ups, and lab work — synced with your physician's calendar."}
           </p>
         </div>
