@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom";
 import { Activity, Bot, Calendar, ClipboardList, FileText, HeartPulse, PlusCircle, Users } from "lucide-react";
 import { AppShell, type NavItem } from "../../components/layout/AppShell";
 import { useAppData } from "../../data/AppDataContext";
+import "./PatientLayout.css";
 const navItems:NavItem[]=[
  {to:"/patient",label:"Adherence",icon:Activity,end:true},
  {to:"/patient/ai",label:"AI Assistant",icon:Bot},

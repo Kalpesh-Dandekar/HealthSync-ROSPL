@@ -49,7 +49,7 @@ export function PatientAddData() {
   }
 
   return (
-    <div className="screen-page flex min-h-0 flex-col gap-4 overflow-auto pr-1">
+    <div className="patient-workspace-page patient-add-data screen-page flex min-h-0 flex-col gap-4 overflow-auto pr-1">
       <div className="shrink-0">
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-500">Patient data</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-charcoal-900">Add & manage your health data</h1>

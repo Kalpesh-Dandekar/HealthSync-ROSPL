@@ -37,7 +37,7 @@ export function ReportsPage({ role }: { role: UserRole }) {
     const link = document.createElement("a"); link.href = url; link.download = "healthsync-care-summary.txt"; link.click(); URL.revokeObjectURL(url);
   };
 
-  return <div className="space-y-6">
+  return <div className={`${role === "patient" ? "patient-workspace-page patient-reports" : ""} space-y-6`}>
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div><h1 className="font-display text-xl font-semibold text-charcoal-900 sm:text-2xl">Reports</h1><p className="mt-1 text-sm text-charcoal-500">Database-generated adherence, vitals and care summaries for the patients your account is authorized to see.</p></div>
       <button onClick={exportAll} disabled={!reports.length} className="flex items-center gap-2 rounded-lg border border-paper-300 bg-paper-0 px-3.5 py-2 text-xs font-semibold text-charcoal-700 disabled:opacity-50"><Download className="h-3.5 w-3.5"/>Export all</button>

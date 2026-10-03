@@ -75,7 +75,7 @@ export function AppointmentsPage({ role }: { role: UserRole }) {
   const past = appointments.filter((a) => a.status !== "upcoming");
 
   return (
-    <div className="space-y-6">
+    <div className={`${role === "patient" ? "patient-workspace-page patient-appointments" : ""} space-y-6`}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-xl font-semibold text-charcoal-900 sm:text-2xl">

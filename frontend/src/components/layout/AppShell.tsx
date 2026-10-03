@@ -39,10 +39,10 @@ export function AppShell({
   const roleLabel = roleLabels[role];
 
   return (
-    <div className="h-screen overflow-hidden bg-paper-50 text-charcoal-900 lg:flex">
+    <div className={`app-shell app-shell--${role} h-screen overflow-hidden bg-paper-50 text-charcoal-900 lg:flex`}>
       {/* Desktop navigation */}
-      <aside className="hidden w-[272px] min-h-0 shrink-0 flex-col border-r border-paper-200 bg-paper-0 lg:flex">
-        <div className="border-b border-paper-200 px-5 py-5">
+      <aside className="app-shell__sidebar hidden w-[272px] min-h-0 shrink-0 flex-col border-r border-paper-200 bg-paper-0 lg:flex">
+        <div className="app-shell__brand border-b border-paper-200 px-5 py-5">
           <button onClick={() => navigate(`/${role}`)} className="flex items-center gap-3 text-left">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-ink-800 text-white shadow-lg shadow-ink-800/20">
               <HeartPulse className="h-5 w-5" />
@@ -54,7 +54,7 @@ export function AppShell({
           </button>
         </div>
 
-        <div className="mx-4 mt-5 rounded-2xl border border-paper-200 bg-paper-50 p-4">
+        <div className="app-shell__workspace mx-4 mt-5 rounded-2xl border border-paper-200 bg-paper-50 p-4">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-charcoal-500">Workspace</span>
             <span className="flex items-center gap-1.5 text-[10px] font-semibold text-sage-600"><span className="h-1.5 w-1.5 rounded-full bg-sage-600" />Live</span>
@@ -63,7 +63,7 @@ export function AppShell({
           <p className="mt-1 text-xs leading-relaxed text-charcoal-500">{roleDescriptions[role]}</p>
         </div>
 
-        <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-5">
+        <nav className="app-shell__nav min-h-0 flex-1 overflow-y-auto px-3 py-5">
           <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-charcoal-500">Navigation</p>
           <div className="space-y-1">
             {navItems.map((item) => (
@@ -72,9 +72,9 @@ export function AppShell({
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) =>
-                  `group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all ${
+                  `app-shell__nav-link group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all ${
                     isActive
-                      ? "bg-ink-100 text-ink-500 ring-1 ring-inset ring-ink-700/20"
+                      ? "is-active bg-ink-100 text-ink-500 ring-1 ring-inset ring-ink-700/20"
                       : "text-charcoal-700 hover:bg-paper-100 hover:text-charcoal-900"
                   }`
                 }
@@ -93,7 +93,7 @@ export function AppShell({
           </div>
         </nav>
 
-        <div className="shrink-0 border-t border-paper-200 p-4">
+        <div className="app-shell__profile shrink-0 border-t border-paper-200 p-4">
           <div className="flex items-center gap-3 rounded-xl bg-paper-50 p-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-100 text-sm font-bold text-ink-600">
               {userName.charAt(0).toUpperCase()}
@@ -110,7 +110,7 @@ export function AppShell({
       </aside>
 
       {/* Mobile header */}
-      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-paper-200 bg-paper-0/95 px-4 py-3 backdrop-blur lg:hidden">
+      <header className="app-shell__mobile-header sticky top-0 z-50 flex items-center justify-between border-b border-paper-200 bg-paper-0/95 px-4 py-3 backdrop-blur lg:hidden">
         <button onClick={() => navigate(`/${role}`)} className="flex items-center gap-2.5 text-left">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-ink-800 text-white"><HeartPulse className="h-4.5 w-4.5" /></span>
           <span><span className="block text-sm font-bold">HealthSync</span><span className="block text-[9px] font-semibold uppercase tracking-[0.16em] text-charcoal-500">{roleLabel}</span></span>
@@ -144,9 +144,9 @@ export function AppShell({
         </div>
       )}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="app-shell__workspace-canvas flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="pointer-events-none fixed inset-0 -z-0 opacity-40 cv-grid" />
-        <main className="relative z-10 min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-3 sm:px-5 sm:pb-4 sm:pt-4 lg:px-6 lg:pb-5 lg:pt-5">
+        <main className="app-shell__main relative z-10 min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-3 sm:px-5 sm:pb-4 sm:pt-4 lg:px-6 lg:pb-5 lg:pt-5">
           <div className="w-full">{children}</div>
         </main>
 

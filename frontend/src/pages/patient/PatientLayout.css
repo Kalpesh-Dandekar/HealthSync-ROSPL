@@ -1,0 +1,254 @@
+.app-shell--patient {
+  --patient-green: #167a55;
+  --patient-mint: #3ca97c;
+  --patient-ink: #16332a;
+  --patient-muted: #64766e;
+  --patient-line: #dce7e1;
+  --patient-surface: #f9fcfa;
+  --patient-canvas: #edf3ef;
+  color: var(--patient-ink);
+  background: var(--patient-canvas);
+}
+
+.app-shell--patient .app-shell__sidebar {
+  border-color: rgba(137, 174, 157, .13);
+  color: #eaf3ee;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(56, 167, 113, .11), transparent 29%),
+    linear-gradient(180deg, #0c1713 0%, #08110e 100%);
+  box-shadow: 12px 0 40px rgba(25, 55, 43, .08);
+}
+
+.app-shell--patient .app-shell__brand,
+.app-shell--patient .app-shell__profile { border-color: rgba(137, 174, 157, .12); }
+.app-shell--patient .app-shell__brand button > span:first-child {
+  background: linear-gradient(145deg, #269469, #176647);
+  box-shadow: 0 10px 24px rgba(19, 115, 77, .23), inset 0 1px rgba(255, 255, 255, .13);
+}
+.app-shell--patient .app-shell__brand .text-charcoal-500,
+.app-shell--patient .app-shell__nav > p { color: #71857b; }
+
+.app-shell--patient .app-shell__workspace {
+  border-color: rgba(116, 168, 143, .14);
+  background: linear-gradient(145deg, rgba(24, 45, 36, .8), rgba(14, 28, 22, .86));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .025);
+}
+.app-shell--patient .app-shell__workspace .text-charcoal-500 { color: #81958b; }
+.app-shell--patient .app-shell__workspace .text-sage-600 { color: #75d3a4; }
+.app-shell--patient .app-shell__workspace .bg-sage-600 { background: #5bc992; }
+
+.app-shell--patient .app-shell__nav-link { color: #98aaa1; }
+.app-shell--patient .app-shell__nav-link:not(.is-active):hover {
+  color: #e5eee9;
+  background: rgba(137, 174, 157, .07);
+}
+.app-shell--patient .app-shell__nav-link:not(.is-active) > span:first-child {
+  color: #82968c;
+  background: rgba(143, 177, 161, .07);
+}
+.app-shell--patient .app-shell__nav-link.is-active {
+  position: relative;
+  color: #dff6ea;
+  border-color: rgba(102, 208, 158, .19);
+  background: linear-gradient(100deg, rgba(48, 137, 96, .25), rgba(31, 82, 61, .15));
+  box-shadow: inset 3px 0 #55c890, 0 8px 24px rgba(0, 0, 0, .1);
+}
+.app-shell--patient .app-shell__nav-link.is-active > span:first-child {
+  color: #d9f8e9;
+  background: rgba(71, 184, 130, .2);
+  box-shadow: inset 0 0 0 1px rgba(111, 219, 168, .16);
+}
+.app-shell--patient .app-shell__nav-link.is-active > span:last-child { background: #66d7a0; }
+
+.app-shell--patient .app-shell__profile > div {
+  color: #e8f1ec;
+  background: rgba(137, 174, 157, .06);
+}
+.app-shell--patient .app-shell__profile > div .bg-ink-100 {
+  color: #80ddb0;
+  background: rgba(49, 144, 99, .2);
+}
+.app-shell--patient .app-shell__profile .text-charcoal-500,
+.app-shell--patient .app-shell__profile > button { color: #7f9288; }
+.app-shell--patient .app-shell__profile > button:hover { color: #dce9e2; background: rgba(137, 174, 157, .07); }
+
+.app-shell--patient .app-shell__workspace-canvas {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse 44rem 25rem at 72% 0%, rgba(75, 151, 115, .07), transparent 68%),
+    linear-gradient(135deg, #e7eeeb 0%, #dfe9e5 58%, #e5ecea 100%);
+}
+.app-shell--patient .app-shell__workspace-canvas .cv-grid {
+  opacity: .55;
+  background-image: linear-gradient(rgba(48, 91, 71, .026) 1px, transparent 1px), linear-gradient(90deg, rgba(48, 91, 71, .026) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+.app-shell--patient .app-shell__mobile-header {
+  color: #eaf3ee;
+  border-color: rgba(137, 174, 157, .13);
+  background: rgba(10, 22, 17, .96);
+}
+.app-shell--patient .app-shell__mobile-header .text-charcoal-500 { color: #82958b; }
+
+/* Patient workspace surface system. Scoped here so shared pages keep their
+   existing Caregiver and Physician appearance. */
+.app-shell--patient .app-shell__main { color: #1b352c; }
+.app-shell--patient .app-shell__main .patient-workspace-page,
+.app-shell--patient .app-shell__main > div > .space-y-6 { color: #1b352c; }
+.app-shell--patient .app-shell__main .text-charcoal-900,
+.app-shell--patient .app-shell__main .text-charcoal-800 { color: #19342a; }
+.app-shell--patient .app-shell__main .text-charcoal-700,
+.app-shell--patient .app-shell__main .text-charcoal-600 { color: #4e655b; }
+.app-shell--patient .app-shell__main .text-charcoal-500 { color: #687b72; }
+.app-shell--patient .app-shell__main .text-ink-500,
+.app-shell--patient .app-shell__main .text-ink-600,
+.app-shell--patient .app-shell__main .text-ink-700,
+.app-shell--patient .app-shell__main .text-ink-800 { color: #237757; }
+.app-shell--patient .app-shell__main .font-display { font-family: var(--font-body); letter-spacing: -.025em; }
+
+.app-shell--patient .app-shell__main .bg-paper-0 {
+  color: #1b352c;
+  background-color: #f8fbf9;
+}
+.app-shell--patient .app-shell__main .bg-paper-50 { background-color: #eef4f1; }
+.app-shell--patient .app-shell__main .bg-paper-100 { background-color: #e7efeb; }
+.app-shell--patient .app-shell__main .border-paper-200 { border-color: #d8e4de; }
+.app-shell--patient .app-shell__main .border-paper-300 { border-color: #cbdad3; }
+.app-shell--patient .app-shell__main .bg-ink-100 { background-color: #e3f1e9; }
+.app-shell--patient .app-shell__main .bg-ink-800 { background-color: #197553; }
+.app-shell--patient .app-shell__main .bg-ink-800:hover { background-color: #125f43; }
+.app-shell--patient .app-shell__main .bg-sage-100 { background-color: #e4f2e9; }
+.app-shell--patient .app-shell__main .text-sage-700 { color: #2e7450; }
+.app-shell--patient .app-shell__main .bg-gold-100 { background-color: #faf1de; }
+.app-shell--patient .app-shell__main .text-gold-700 { color: #8b6429; }
+.app-shell--patient .app-shell__main .bg-brick-100 { background-color: #fae9e7; }
+.app-shell--patient .app-shell__main .text-brick-700 { color: #a1433a; }
+
+.app-shell--patient .app-shell__main input,
+.app-shell--patient .app-shell__main select,
+.app-shell--patient .app-shell__main textarea {
+  color: #1c372d;
+  border-color: #cbdad3;
+  background: #fbfdfc;
+  box-shadow: inset 0 1px 2px rgba(35, 70, 54, .035);
+  color-scheme: light;
+}
+.app-shell--patient .app-shell__main input::placeholder,
+.app-shell--patient .app-shell__main textarea::placeholder { color: #83928b; }
+.app-shell--patient .app-shell__main input:focus,
+.app-shell--patient .app-shell__main select:focus,
+.app-shell--patient .app-shell__main textarea:focus {
+  border-color: #4ca57d;
+  box-shadow: 0 0 0 3px rgba(48, 153, 105, .09);
+}
+.app-shell--patient .app-shell__main input[type="checkbox"] { accent-color: #197553; }
+.app-shell--patient .app-shell__main button:disabled { cursor: not-allowed; filter: saturate(.72); }
+.app-shell--patient .app-shell__main input[type="date"]::-webkit-calendar-picker-indicator,
+.app-shell--patient .app-shell__main input[type="time"]::-webkit-calendar-picker-indicator { opacity: .68; cursor: pointer; }
+
+/* Legacy Card instances become primary clinical surfaces in Patient only. */
+.app-shell--patient .app-shell__main .rounded-2xl.border.border-paper-200.bg-paper-0 {
+  color: #1b352c;
+  border-color: #d5e2dc;
+  background: #f8fbf9;
+  box-shadow: 0 12px 32px rgba(38, 73, 57, .065), inset 0 1px rgba(255, 255, 255, .82);
+}
+.app-shell--patient .app-shell__main .rounded-xl.border.border-paper-200,
+.app-shell--patient .app-shell__main .rounded-lg.border.border-paper-200 {
+  border-color: #d8e4de;
+}
+
+/* Vitals: tinted telemetry and calm chart canvases. */
+.patient-vitals > .grid:nth-of-type(1) > div { background: linear-gradient(145deg, #f8fbfa, #eaf3ef) !important; }
+.patient-vitals > .grid:nth-of-type(1) > div:nth-child(2) { background: linear-gradient(145deg, #f8fbfa, #e8f1f2) !important; }
+.patient-vitals > .grid:nth-of-type(1) > div:nth-child(3) { background: linear-gradient(145deg, #fdfbf7, #f6f0e4) !important; }
+.patient-vitals > .grid:nth-of-type(2) > div {
+  background: #f5f9f7 !important;
+  box-shadow: 0 12px 30px rgba(38, 73, 57, .055) !important;
+}
+.patient-vitals .recharts-cartesian-grid line { stroke: #dce7e1; }
+.patient-vitals .recharts-text { fill: #667a70; }
+.vitals-chart-empty {
+  position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+  color: #73867c; font-size: .66rem; font-weight: 650; letter-spacing: .02em;
+}
+
+/* Add Data: one system, three contextual surface families. */
+.patient-add-data > .grid > section { border-color: #d4e3dc !important; background: #f8fbf9 !important; box-shadow: 0 12px 30px rgba(38, 73, 57, .055) !important; }
+.patient-add-data > .grid > section:nth-child(2) { background: #f3f8f8 !important; }
+.patient-add-data > .grid > section:nth-child(3) { background: #faf8f2 !important; }
+.patient-add-data > .grid > section:nth-child(2) > div:first-child > span { color: #287b73; background: #e2f0ee; }
+.patient-add-data > .grid > section:nth-child(3) > div:first-child > span { color: #8a672d; background: #f5edda; }
+.patient-add-data form + div > p { min-height: 3rem; display: flex; align-items: center; padding: .7rem; border: 1px dashed #cfddd6; border-radius: .7rem; background: rgba(238, 245, 241, .65); }
+
+/* Appointments: scheduling, upcoming and history are separate clinical layers. */
+.patient-appointments > .rounded-2xl:nth-of-type(1) { background: #f7faf8 !important; }
+.patient-appointments > .rounded-2xl:nth-of-type(2) { background: #f1f7f4 !important; }
+.patient-appointments > .rounded-2xl:nth-of-type(3) { background: #fafbf9 !important; }
+.patient-appointments .rounded-xl.border.border-paper-200 { background: #f3f7f5; }
+
+/* Reports read as healthcare documents rather than dark strips. */
+.patient-reports > .space-y-4 { display: grid; gap: .75rem; }
+.patient-reports > .space-y-4 > div { position: relative; overflow: hidden; padding-left: 1.35rem; }
+.patient-reports > .space-y-4 > div::before { content: ""; position: absolute; inset: .8rem auto .8rem 0; width: 3px; border-radius: 999px; background: #4eaa80; }
+.patient-reports > .space-y-4 > div:nth-child(2)::before { background: #4e938d; }
+.patient-reports > .space-y-4 > div:nth-child(3)::before { background: #bd9149; }
+.patient-reports > .space-y-4 > div:nth-child(4)::before { background: #7b8f86; }
+
+/* Records: compact longitudinal sections with distinct tinting. */
+.app-shell--patient .patient-records > .rounded-2xl:nth-of-type(1) { background: #edf5f1; }
+.app-shell--patient .patient-records > .rounded-2xl:nth-of-type(2) { background: #f8fbf9; }
+.app-shell--patient .patient-records > .rounded-2xl:nth-of-type(3) { background: #eff6f5; }
+.app-shell--patient .patient-records > .rounded-2xl:nth-of-type(4) { background: #faf8f2; }
+.record-section-icon, .care-network__icon {
+  width: 2rem; height: 2rem; display: grid; place-items: center; border: 1px solid #d1e2da;
+  border-radius: .62rem; color: #287c5a; background: rgba(228, 241, 234, .84);
+}
+.record-section-icon svg, .care-network__icon svg { width: .92rem; height: .92rem; }
+.patient-records > .rounded-2xl:nth-of-type(3) .record-section-icon { color: #2c7c76; background: #e2f0ee; }
+.patient-records > .rounded-2xl:nth-of-type(4) .record-section-icon { color: #8b682d; background: #f5edda; }
+.record-empty { min-height: 3.25rem; display: flex; align-items: center; gap: .55rem; padding: .75rem; border: 1px dashed #cfddd6; border-radius: .7rem; background: rgba(238, 245, 241, .68); }
+.record-empty svg { width: .9rem; height: .9rem; color: #6a9a83; }
+
+/* Shared AI route: reserve deep green for the assistant itself, not the page. */
+.app-shell--patient .app-shell__main > div > .space-y-6 > .grid > .min-w-0 > .rounded-2xl:first-child {
+  color: #edf6f1;
+  border-color: rgba(91, 163, 128, .22);
+  background: linear-gradient(145deg, #123126, #0c2119);
+}
+.app-shell--patient .app-shell__main > div > .space-y-6 > .grid > .min-w-0 > .rounded-2xl:first-child .bg-paper-50 { background: rgba(14, 43, 32, .82); }
+.app-shell--patient .app-shell__main > div > .space-y-6 > .grid > .min-w-0 > .rounded-2xl:first-child .bg-paper-100 { color: #dbe9e2; background: rgba(134, 173, 154, .12); }
+.app-shell--patient .app-shell__main > div > .space-y-6 > .grid > .min-w-0 > .rounded-2xl:first-child .text-charcoal-500 { color: #8fa99c; }
+.app-shell--patient .app-shell__main > div > .space-y-6 > .grid > .min-w-0 > .rounded-2xl:first-child input { color: #eaf3ee; border-color: rgba(135, 180, 158, .24); background: rgba(5, 18, 13, .45); }
+.app-shell--patient .app-shell__main aside > .rounded-2xl:first-child { background: #f3f8f5 !important; }
+.app-shell--patient .app-shell__main aside > .rounded-2xl:nth-child(2) { border-color: #cae2d6 !important; background: #e9f4ee !important; }
+.app-shell--patient .app-shell__main .md\:grid-cols-3 > div:nth-child(2) { background: #f1f7f6 !important; }
+.app-shell--patient .app-shell__main .md\:grid-cols-3 > div:nth-child(3) { background: #faf7ef !important; }
+
+/* Care network shared route: collaboration layers and deliberate empty states. */
+.app-shell--patient .app-shell__main > div > .space-y-6 > .rounded-2xl:nth-of-type(1) { background: #f4f9f6; }
+.app-shell--patient .app-shell__main > div > .space-y-6 > .rounded-2xl:nth-of-type(2) { background: #eef6f3; }
+.app-shell--patient .app-shell__main > div > .space-y-6 > .rounded-2xl:nth-of-type(3) { background: #f8faf8; }
+.app-shell--patient .app-shell__main > div > .space-y-6 > .rounded-2xl p.text-sm.text-charcoal-500:only-child {
+  padding: .8rem; border: 1px dashed #cfddd6; border-radius: .7rem; background: rgba(235, 243, 239, .7);
+}
+.app-shell--patient .patient-care-network .care-network__connections { background: #eef6f5 !important; }
+.app-shell--patient .patient-care-network .care-network__connect { background: #edf6f0 !important; }
+.app-shell--patient .patient-care-network .care-network__notes { background: #f8f7f3 !important; }
+.care-network__connections .care-network__icon { color: #2b7c75; background: #e1efee; }
+.care-network__notes .care-network__icon { color: #7a6b4d; border-color: #e1dacb; background: #f2ede3; }
+.care-network__empty { min-height: 4.2rem; display: flex; align-items: center; gap: .7rem; padding: .75rem; border: 1px dashed #c8dbd5; border-radius: .72rem; color: #4d6e65; background: rgba(245, 250, 248, .72); }
+.care-network__empty > svg { width: 1.05rem; height: 1.05rem; flex: 0 0 auto; color: #4a8d79; }
+.care-network__empty p { margin: 0; font-size: .69rem; font-weight: 750; }
+.care-network__empty span { display: block; margin-top: .16rem; color: #75877f; font-size: .58rem; }
+
+@media (max-width: 640px) {
+  .app-shell--patient .app-shell__main { padding-inline: .85rem; }
+  .patient-reports > .space-y-4 { display: block; }
+  .patient-reports > .space-y-4 > div + div { margin-top: .7rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell--patient *, .app-shell--patient *::before, .app-shell--patient *::after { transition-duration: .01ms !important; }
+}

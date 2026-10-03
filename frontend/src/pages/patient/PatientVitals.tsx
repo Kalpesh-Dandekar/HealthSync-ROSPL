@@ -21,7 +21,7 @@ export function PatientVitals() {
   ];
 
   return (
-    <div className="screen-page space-y-4">
+    <div className="patient-workspace-page patient-vitals screen-page space-y-4">
       <div className="flex items-end justify-between gap-4">
         <div>
         <h1 className="font-display text-xl font-semibold text-charcoal-900 sm:text-2xl">
@@ -60,7 +60,7 @@ export function PatientVitals() {
           title="Heart rate trend"
           subtitle="Today, sampled every 4 hours"
         />
-        <div className="h-[190px] w-full sm:h-[205px]">
+        <div className="relative h-[190px] w-full sm:h-[205px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={vitals} margin={{ left: -20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eeece5" />
@@ -93,6 +93,7 @@ export function PatientVitals() {
               />
             </LineChart>
           </ResponsiveContainer>
+          {vitals.length === 0 && <div className="vitals-chart-empty">No readings yet</div>}
         </div>
       </Card>
 
@@ -101,7 +102,7 @@ export function PatientVitals() {
           title="Blood glucose trend"
           subtitle="Continuous glucose monitor readings"
         />
-        <div className="h-[190px] w-full sm:h-[205px]">
+        <div className="relative h-[190px] w-full sm:h-[205px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={vitals} margin={{ left: -20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eeece5" />
@@ -129,6 +130,7 @@ export function PatientVitals() {
               />
             </LineChart>
           </ResponsiveContainer>
+          {vitals.length === 0 && <div className="vitals-chart-empty">No readings yet</div>}
         </div>
       </Card>
       </div>
