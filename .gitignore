@@ -1,6 +1,29 @@
+# Dependencies
 node_modules/
+
+# Build and test output
 dist/
-.env
-backend/.env
+build/
+coverage/
 *.tsbuildinfo
-backend/node_modules/
+
+# Local environment files (keep safe templates)
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Logs and caches
+*.log
+logs/
+.cache/
+.eslintcache
+.vite/
+__pycache__/
+*.py[cod]
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

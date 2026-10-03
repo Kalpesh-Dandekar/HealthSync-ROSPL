@@ -6,11 +6,13 @@ Stack: Node.js + Express + PostgreSQL + Prisma + JWT + bcrypt + Socket.IO.
 
 ## Install
 
-From project root:
+From the project root:
 
 ```bash
-npm install
-npm run backend:install
+cd frontend
+npm ci
+cd ../backend
+npm ci
 ```
 
 Then copy:
@@ -44,6 +46,7 @@ npm run dev
 Frontend, in another terminal from the project root:
 
 ```bash
+cd frontend
 npm run dev
 ```
 

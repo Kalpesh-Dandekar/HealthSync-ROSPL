@@ -28,7 +28,8 @@ This version keeps the existing UI and completes the database-backed patient, ca
 From the project root:
 
 ```bash
-npm install
+cd frontend
+npm ci
 npm run dev
 ```
 
@@ -38,7 +39,7 @@ If Vite chooses a different port, the backend CORS list already allows localhost
 
 ```bash
 cd backend
-npm install
+npm ci
 npm run prisma:generate
 npm run start
 ```

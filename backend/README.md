@@ -4,10 +4,10 @@ Node.js + Express + PostgreSQL + Prisma + JWT + bcrypt + Socket.IO.
 
 ## First setup
 
-From `ROSPL-PROJECT/backend`:
+From the repository's `backend` directory:
 
 ```bash
-npm install
+npm ci
 npx prisma generate
 ```
 
@@ -47,9 +47,9 @@ It saves real data to PostgreSQL through Prisma:
 After extracting the project, create `backend/.env` from `.env.example`, then run from `backend`:
 
 ```powershell
-npm install
+npm ci
 npx prisma generate
 npm run dev
 ```
 
-Run the frontend separately with `npm install` and `npm run dev` from the project root.
+Run the frontend separately with `npm ci` and `npm run dev` from the repository's `frontend` directory.

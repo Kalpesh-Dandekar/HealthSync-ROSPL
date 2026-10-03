@@ -47,11 +47,12 @@ The product direction is grounded in three pieces of published research
 Frontend only:
 
 ```bash
-npm install
+cd frontend
+npm ci
 npm run dev
 ```
 
-Full-stack local setup: see `BACKEND_SETUP.md`.
+Full-stack local setup: see [`docs/BACKEND_SETUP.md`](docs/BACKEND_SETUP.md).
 
 Open the app and pick a role (Patient / Caregiver / Physician) from the
 landing screen — no login required in this prototype.
@@ -59,22 +60,23 @@ landing screen — no login required in this prototype.
 ## Project structure
 
 ```
-src/
-  components/
-    layout/AppShell.tsx      # shared sidebar + mobile nav shell, role-aware
-    ui/                       # Card, Badge, AdherenceRing primitives
-  api/
-    healthsyncApi.ts           # REST + Socket.IO client
-  data/
-    mockData.ts                # fallback demo data
-    AppDataContext.tsx         # API-backed state + real-time event bridge
-server/
-  index.js                     # Express + Socket.IO API
-  prisma/schema.prisma         # PostgreSQL schema
-  prisma/seed.js               # demo database seed
-  pages/
-    patient/  caregiver/  doctor/   # role-specific screens
-    shared/                          # screens reused across roles (Care Network, Appointments, Reports)
+frontend/
+  public/                    # static frontend assets
+  src/
+    api/                     # REST + Socket.IO clients
+    components/              # shared layout and UI primitives
+    data/                    # application state and demo fallback data
+    ml/                      # adherence-risk model
+    pages/
+      patient/ caregiver/ doctor/ # role-specific screens
+      shared/                # screens reused across roles
+backend/
+  prisma/schema.prisma       # PostgreSQL schema
+  scheduler/                 # optional ASP/Clingo appointment optimizer
+  scripts/                   # backend data utilities
+  server.js                  # Express + Socket.IO API
+docs/                        # setup and implementation notes
+scripts/                     # root development/setup utilities
 ```
 
 ## Roadmap
@@ -89,19 +91,25 @@ server/
 
 The backend is in `backend/` and uses PostgreSQL + Prisma + Express + JWT/bcrypt + Socket.IO.
 
-From the project root:
+Frontend:
 
 ```bash
-npm install
-npm run backend:install
+cd frontend
+npm ci
+```
+
+Backend, from the project root:
+
+```bash
+cd backend
+npm ci
 ```
 
 Copy `backend/.env.example` to `backend/.env` and set your PostgreSQL password.
 
-Then:
+Then, from `backend/`:
 
 ```bash
-cd backend
 npx prisma generate
 npm run dev
 ```
