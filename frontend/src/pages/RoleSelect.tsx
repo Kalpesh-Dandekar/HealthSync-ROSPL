@@ -1,153 +1,73 @@
 import { Link, useNavigate } from "react-router-dom";
-import {
-  Activity,
-  ArrowRight,
-  HeartPulse,
-  Pill,
-  ShieldCheck,
-  Stethoscope,
-  Users,
-} from "lucide-react";
+import { Activity, ArrowRight, HeartPulse, Pill, ShieldCheck, Stethoscope, Users } from "lucide-react";
+import type { CSSProperties } from "react";
+import "./RoleSelect.css";
 
 const roles = [
-  {
-    key: "patient",
-    title: "Patient",
-    desc: "Track medications, vitals and appointments in one private health space.",
-    icon: Pill,
-  },
-  {
-    key: "caregiver",
-    title: "Caregiver",
-    desc: "Stay connected to adherence signals and respond when support is needed.",
-    icon: Users,
-  },
-  {
-    key: "doctor",
-    title: "Physician",
-    desc: "Review patient trends, records, appointments and urgent events.",
-    icon: Stethoscope,
-  },
+  { key: "patient", title: "Patient", desc: "Track medications, vitals and appointments in one private health space.", icon: Pill, accent: "primary" },
+  { key: "caregiver", title: "Caregiver", desc: "Stay connected to adherence signals and respond when support is needed.", icon: Users, accent: "care" },
+  { key: "doctor", title: "Physician", desc: "Review patient trends, records, appointments and urgent events.", icon: Stethoscope, accent: "clinical" },
 ] as const;
 
 export function RoleSelect() {
   const navigate = useNavigate();
-
   return (
-    <div className="cv-grid min-h-screen overflow-hidden bg-paper-50 px-4 py-5 text-charcoal-900 sm:px-8 sm:py-8">
-      <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-6xl flex-col">
-        <header className="flex items-center justify-between border-b border-paper-200 pb-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-ink-800 text-white shadow-xl shadow-ink-800/20">
-              <HeartPulse className="h-5.5 w-5.5" />
-            </div>
-
-            <div>
-              <h1 className="text-base font-bold tracking-tight sm:text-lg">
-                HealthSync
-              </h1>
-
-              <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-charcoal-500 sm:text-[10px]">
-                Intelligent connected care
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link
-              to="/login"
-              className="rounded-xl border border-paper-200 bg-paper-0 px-3 py-2 text-[11px] font-semibold text-charcoal-700 transition hover:border-ink-700/40 hover:text-charcoal-900"
-            >
-              Log in
-            </Link>
-
-            <Link
-              to="/signup"
-              className="rounded-xl bg-ink-800 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-ink-700"
-            >
-              Sign up
-            </Link>
-          </div>
+    <div className="landing-page">
+      <div className="landing-ambient landing-ambient--one" aria-hidden="true" />
+      <div className="landing-ambient landing-ambient--two" aria-hidden="true" />
+      <div className="landing-frame">
+        <header className="landing-header">
+          <Link className="landing-brand" to="/" aria-label="HealthSync home">
+            <span className="landing-brand__mark" aria-hidden="true"><HeartPulse /></span>
+            <span className="landing-brand__copy">
+              <span className="landing-brand__name">HealthSync</span>
+              <span className="landing-brand__tagline">Intelligent connected care</span>
+            </span>
+          </Link>
+          <nav className="landing-nav" aria-label="Account navigation">
+            <Link to="/login" className="landing-button landing-button--secondary">Log in</Link>
+            <Link to="/signup" className="landing-button landing-button--primary">Sign up <ArrowRight aria-hidden="true" /></Link>
+          </nav>
         </header>
 
-        <section className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[1.05fr_.95fr] lg:gap-16">
-          <div className="animate-soft-pop">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-ink-700/20 bg-ink-100 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-ink-500">
-              <Activity className="h-3.5 w-3.5" />
-              Connected health monitoring
+        <main className="landing-hero">
+          <section className="landing-intro" aria-labelledby="landing-title">
+            <div className="landing-eyebrow">
+              <span className="landing-eyebrow__pulse" aria-hidden="true" />
+              <Activity aria-hidden="true" /> Connected health monitoring
             </div>
-
-            <h2 className="max-w-2xl text-4xl font-semibold tracking-[-0.04em] text-charcoal-900 sm:text-5xl lg:text-6xl">
-              One health story.
-              <br />
-              <span className="text-ink-600">Better connected.</span>
-            </h2>
-
-            <p className="mt-6 max-w-xl text-sm leading-7 text-charcoal-500 sm:text-base">
-              HealthSync brings medication adherence, remote health signals
-              and coordinated care into a single role-aware workspace for
-              patients, caregivers and physicians.
-            </p>
-
-            <div className="mt-8 flex flex-wrap gap-3 text-xs text-charcoal-500">
-              <span className="flex items-center gap-2 rounded-lg border border-paper-200 bg-paper-0 px-3 py-2">
-                <ShieldCheck className="h-4 w-4 text-ink-600" />
-                Role-based access
-              </span>
-
-              <span className="flex items-center gap-2 rounded-lg border border-paper-200 bg-paper-0 px-3 py-2">
-                <Activity className="h-4 w-4 text-ink-600" />
-                Risk insights
-              </span>
+            <h1 id="landing-title" className="landing-title">One health story.<span>Better connected.</span></h1>
+            <p className="landing-description">HealthSync brings medication adherence, remote health signals and coordinated care into a single role-aware workspace for patients, caregivers and physicians.</p>
+            <div className="landing-cues" aria-label="Platform highlights">
+              <span className="landing-cue"><span className="landing-cue__icon" aria-hidden="true"><ShieldCheck /></span>Role-based access</span>
+              <span className="landing-cue"><span className="landing-cue__icon" aria-hidden="true"><Activity /></span>Risk insights</span>
             </div>
-          </div>
+          </section>
 
-          <div>
-            <div className="mb-3 flex items-end justify-between">
+          <section className="workspace-panel" aria-labelledby="workspace-title">
+            <div className="workspace-panel__header">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-charcoal-500">
-                  Enter workspace
-                </p>
-
-                <p className="mt-1 text-sm text-charcoal-700">
-                  Choose a role to explore the platform.
-                </p>
+                <p className="workspace-panel__eyebrow">Enter workspace</p>
+                <h2 id="workspace-title">Choose your care view</h2>
+                <p>Choose a role to explore the platform.</p>
               </div>
+              <span className="workspace-panel__status" aria-label="Platform online"><span aria-hidden="true" />Secure access</span>
             </div>
-
-            <div className="space-y-3">
-              {roles.map((r, index) => (
-                <button
-                  key={r.key}
-                  onClick={() => navigate(`/login?role=${r.key}`)}
-                  className="animate-soft-pop cv-glow group flex w-full items-center gap-4 rounded-2xl border border-paper-200 bg-paper-0 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-ink-700/40 hover:bg-paper-100 sm:p-5"
-                  style={{ animationDelay: `${index * 70}ms` }}
-                >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ink-100 text-ink-600 transition-colors group-hover:bg-ink-800 group-hover:text-white">
-                    <r.icon className="h-5 w-5" />
-                  </span>
-
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-charcoal-900">
-                        {r.title}
-                      </span>
-                    </span>
-
-                    <span className="mt-1 block max-w-md text-xs leading-5 text-charcoal-500">
-                      {r.desc}
-                    </span>
-                  </span>
-
-                  <ArrowRight className="h-4.5 w-4.5 shrink-0 text-charcoal-500 transition-transform group-hover:translate-x-1 group-hover:text-ink-600" />
+            <div className="workspace-roles">
+              {roles.map((role, index) => (
+                <button key={role.key} type="button" onClick={() => navigate(`/login?role=${role.key}`)} className="workspace-role" data-accent={role.accent} style={{ "--role-delay": `${index * 70}ms` } as CSSProperties} aria-label={`Continue as ${role.title}`}>
+                  <span className="workspace-role__icon" aria-hidden="true"><role.icon /></span>
+                  <span className="workspace-role__copy"><span className="workspace-role__title">{role.title}</span><span className="workspace-role__description">{role.desc}</span></span>
+                  <span className="workspace-role__arrow" aria-hidden="true"><ArrowRight /></span>
                 </button>
               ))}
             </div>
-          </div>
-        </section>
+            <div className="workspace-panel__assurance"><ShieldCheck aria-hidden="true" />Role-aware access keeps every care view focused and private.</div>
+          </section>
+        </main>
 
-        <footer className="flex flex-col gap-2 border-t border-paper-200 py-4 text-[10px] text-charcoal-500 sm:flex-row sm:items-center sm:justify-between">
-          <span>HealthSync • Connected care platform</span>
+        <footer className="landing-footer">
+          <span><HeartPulse aria-hidden="true" />HealthSync <i aria-hidden="true" /> Connected care platform</span>
           <span>PostgreSQL + secure authentication backend</span>
         </footer>
       </div>

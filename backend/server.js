@@ -21,7 +21,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const httpServer = http.createServer(app);
 const PORT = Number(process.env.PORT || 5000);
-const JWT_SECRET = process.env.JWT_SECRET || "healthsync-local-secret";
+const JWT_SECRET = process.env.JWT_SECRET?.trim();
+if (!JWT_SECRET) throw new Error("JWT_SECRET is required in backend/.env");
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5175";
 const allowedOrigins = new Set([
   CLIENT_ORIGIN,
