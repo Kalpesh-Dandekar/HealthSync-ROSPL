@@ -8,6 +8,7 @@ import {
   Users2,
 } from "lucide-react";
 import { AppShell, type NavItem } from "../../components/layout/AppShell";
+import "./DoctorLayout.css";
 
 const navItems: NavItem[] = [
   { to: "/doctor", label: "Patients", icon: Users2, end: true },

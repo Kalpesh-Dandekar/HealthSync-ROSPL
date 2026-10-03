@@ -65,7 +65,7 @@ export function CareNetworkPage({ authorName: _authorName, authorRole }: { autho
 
   const selected = connections.find((connection) => connection.patient?.id === selectedPatientId)?.patient;
   const displayName = selected?.name || patient.name || "Patient";
-  const patientClass = authorRole === "patient" ? "patient-workspace-page patient-care-network" : "";
+  const patientClass = authorRole === "patient" ? "patient-workspace-page patient-care-network" : authorRole === "doctor" ? "doctor-shared-page doctor-care-network" : "";
 
   return (
     <div className={`${patientClass} space-y-6`}>
