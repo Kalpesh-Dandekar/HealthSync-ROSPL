@@ -5,8 +5,8 @@ import { Badge } from "../../components/ui/Badge";
 import { roleDataApi, type ReportRecord } from "../../api/roleData";
 import type { UserRole } from "../../types";
 
-const icons = { adherence: Activity, vitals: HeartPulse, consultation: Stethoscope, lab: FileText } as const;
-const tones = { adherence: "ink", vitals: "sage", consultation: "gold", lab: "neutral" } as const;
+const icons = { adherence: Activity, vitals: HeartPulse, consultation: Stethoscope, lab: FileText, clinical: FileText } as const;
+const tones = { adherence: "ink", vitals: "sage", consultation: "gold", lab: "neutral", clinical: "ink" } as const;
 
 function downloadReport(report: ReportRecord) {
   const content = `${report.title}\nPatient: ${report.patientName}\nGenerated: ${report.generatedOn}\nAuthored by: ${report.authoredBy}\n\n${report.summary}\n`;
@@ -39,7 +39,7 @@ export function ReportsPage({ role }: { role: UserRole }) {
 
   return <div className={`${role === "patient" ? "patient-workspace-page patient-reports" : role === "doctor" ? "doctor-shared-page doctor-reports" : "caregiver-shared-page caregiver-reports"} space-y-6`}>
     <div className="flex flex-wrap items-start justify-between gap-4">
-      <div><h1 className="font-display text-xl font-semibold text-charcoal-900 sm:text-2xl">Reports</h1><p className="mt-1 text-sm text-charcoal-500">Database-generated adherence, vitals and care summaries for the patients your account is authorized to see.</p></div>
+      <div><h1 className="font-display text-xl font-semibold text-charcoal-900 sm:text-2xl">Reports</h1><p className="mt-1 text-sm text-charcoal-500">Database-generated adherence, vitals, clinical-record and care summaries for the patients your account is authorized to see.</p></div>
       <button onClick={exportAll} disabled={!reports.length} className="flex items-center gap-2 rounded-lg border border-paper-300 bg-paper-0 px-3.5 py-2 text-xs font-semibold text-charcoal-700 disabled:opacity-50"><Download className="h-3.5 w-3.5"/>Export all</button>
     </div>
     {error && <Card><p className="text-sm text-brick-700">{error}</p></Card>}

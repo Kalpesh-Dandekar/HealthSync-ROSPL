@@ -34,6 +34,20 @@ enum AppointmentStatus {
   CANCELLED
 }
 
+enum ClinicalRecordType {
+  CONSULTATION
+  VITAL_ASSESSMENT
+  LAB_RESULT
+  FOLLOW_UP
+  GENERAL_NOTE
+}
+
+enum ClinicalRecordStatus {
+  NORMAL
+  NEEDS_ATTENTION
+  CRITICAL
+}
+
 model User {
   id                   Int              @id @default(autoincrement())
   name                 String
@@ -48,6 +62,8 @@ model User {
   physicianAppointments Appointment[]           @relation("PhysicianAppointments")
   physicianAvailability PhysicianAvailability[]
   physicianUnavailablePeriods PhysicianUnavailablePeriod[]
+  patientClinicalRecords ClinicalRecord[] @relation("PatientClinicalRecords")
+  authoredClinicalRecords ClinicalRecord[] @relation("PhysicianClinicalRecords")
   alerts               Alert[]
   patientConnections   CareConnection[] @relation("PatientConnections")
   caregiverConnections CareConnection[] @relation("CaregiverConnections")
@@ -134,6 +150,29 @@ model PhysicianUnavailablePeriod {
   physician   User     @relation(fields: [physicianId], references: [id], onDelete: Cascade)
 
   @@index([physicianId, startDate, endDate])
+}
+
+model ClinicalRecord {
+  id               Int                  @id @default(autoincrement())
+  patientId        Int
+  physicianId      Int
+  type             ClinicalRecordType
+  title            String
+  clinicalDate     DateTime             @db.Date
+  findings         String               @db.Text
+  interpretation   String               @db.Text
+  recommendations  String               @db.Text
+  status           ClinicalRecordStatus @default(NORMAL)
+  followUpRequired Boolean              @default(false)
+  followUpDate     DateTime?            @db.Date
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  patient          User                 @relation("PatientClinicalRecords", fields: [patientId], references: [id], onDelete: Cascade)
+  physician        User                 @relation("PhysicianClinicalRecords", fields: [physicianId], references: [id], onDelete: Restrict)
+
+  @@index([patientId, clinicalDate])
+  @@index([physicianId, clinicalDate])
+  @@index([status, clinicalDate])
 }
 
 model Alert {

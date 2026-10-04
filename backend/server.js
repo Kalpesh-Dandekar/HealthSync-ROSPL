@@ -145,6 +145,20 @@ function roleName(role) {
   return role === "PHYSICIAN" ? "doctor" : role === "CAREGIVER" ? "caregiver" : "patient";
 }
 
+function clinicalRecordView(record) {
+  return {
+    id: record.id, patientId: record.patientId, physicianId: record.physicianId,
+    patientName: record.patient?.name, physicianName: record.physician?.name,
+    type: record.type, title: record.title,
+    clinicalDate: record.clinicalDate.toISOString().slice(0, 10),
+    findings: record.findings, interpretation: record.interpretation,
+    recommendations: record.recommendations, status: record.status,
+    followUpRequired: record.followUpRequired,
+    followUpDate: record.followUpDate?.toISOString().slice(0, 10) || null,
+    createdAt: record.createdAt.toISOString(), updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
 async function getAssignedPatientIds(userId, role) {
   const where = role === "PHYSICIAN" ? { physicianId: userId } : { caregiverId: userId };
   const connections = await prisma.careConnection.findMany({ where, select: { patientId: true } });
@@ -157,12 +171,13 @@ async function getPatientBundle(patientId) {
     select: { id: true, name: true, email: true, role: true, createdAt: true },
   });
   if (!patient || patient.role !== "PATIENT") return null;
-  const [medications, vitals, alerts, appointments, connections] = await Promise.all([
+  const [medications, vitals, alerts, appointments, connections, clinicalRecords] = await Promise.all([
     prisma.medication.findMany({ where: { userId: patientId }, include: { logs: { orderBy: { scheduledAt: "desc" }, take: 20 } }, orderBy: { createdAt: "desc" } }),
     prisma.vital.findMany({ where: { userId: patientId }, orderBy: { recordedAt: "desc" }, take: 20 }),
     prisma.alert.findMany({ where: { userId: patientId }, orderBy: { createdAt: "desc" }, take: 30 }),
     prisma.appointment.findMany({ where: { userId: patientId }, orderBy: { id: "desc" } }),
     prisma.careConnection.findMany({ where: { patientId }, include: { caregiver: true, physician: true } }),
+    prisma.clinicalRecord.findMany({ where: { patientId }, include: { patient: { select: { name: true } }, physician: { select: { name: true } } }, orderBy: [{ clinicalDate: "desc" }, { createdAt: "desc" }] }),
   ]);
   const caregiver = connections.find(c => c.caregiver)?.caregiver;
   const physician = connections.find(c => c.physician)?.physician;
@@ -180,7 +195,7 @@ async function getPatientBundle(patientId) {
   const completed = medications.flatMap(m => m.logs).filter(l => l.status !== "PENDING").length;
   return {
     patient: { ...publicUser(patient), patientCode: `#${patient.id}`, age: 0, primaryCaregiver: caregiver?.name || "Not connected", physician: physician?.name || "Not connected" },
-    medications, vitals, alerts, appointments, careTeam,
+    medications, vitals, alerts, appointments, clinicalRecords: clinicalRecords.map(clinicalRecordView), careTeam,
     adherenceRate: completed ? Math.round((taken / completed) * 100) : 0,
   };
 }
@@ -422,6 +437,60 @@ app.post("/api/doctor/patients/:id/clinical-note", auth, async (req, res) => {
   res.status(201).json({ id:String(alert.id), author:req.user.name, authorRole:"doctor", note, timestamp:alert.createdAt.toISOString() });
 });
 
+app.get("/api/clinical-records", auth, async (req, res) => {
+  try {
+    let patientIds = req.user.role === "PATIENT" ? [Number(req.user.id)] : await getAssignedPatientIds(Number(req.user.id), req.user.role);
+    const requestedPatientId = Number(req.query.patientId || 0);
+    if (requestedPatientId) {
+      if (!(await requireAssigned(req, res, requestedPatientId))) return res.status(403).json({ message: "You are not authorized to view this patient's clinical records." });
+      patientIds = [requestedPatientId];
+    }
+    if (!patientIds.length) return res.json({ records: [] });
+    const records = await prisma.clinicalRecord.findMany({
+      where: { patientId: { in: patientIds } },
+      include: { patient: { select: { name: true } }, physician: { select: { name: true } } },
+      orderBy: [{ clinicalDate: "desc" }, { createdAt: "desc" }],
+    });
+    res.json({ records: records.map(clinicalRecordView) });
+  } catch (error) {
+    console.error("Get clinical records error:", error);
+    res.status(500).json({ message: "Unable to load clinical records." });
+  }
+});
+
+app.post("/api/doctor/patients/:id/clinical-records", auth, async (req, res) => {
+  if (req.user.role !== "PHYSICIAN") return res.status(403).json({ message: "Physician access required." });
+  try {
+    const patientId = Number(req.params.id);
+    if (!(await requireAssigned(req, res, patientId))) return res.status(403).json({ message: "You are not authorized to create records for this patient." });
+    const type = String(req.body?.type || "").toUpperCase();
+    const title = String(req.body?.title || "").trim();
+    const clinicalDate = String(req.body?.clinicalDate || "");
+    const findings = String(req.body?.findings || "").trim();
+    const interpretation = String(req.body?.interpretation || "").trim();
+    const recommendations = String(req.body?.recommendations || "").trim();
+    const status = String(req.body?.status || "").toUpperCase();
+    const followUpRequired = Boolean(req.body?.followUpRequired);
+    const followUpDate = String(req.body?.followUpDate || "");
+    const validTypes = ["CONSULTATION", "VITAL_ASSESSMENT", "LAB_RESULT", "FOLLOW_UP", "GENERAL_NOTE"];
+    const validStatuses = ["NORMAL", "NEEDS_ATTENTION", "CRITICAL"];
+    if (!validTypes.includes(type) || !validStatuses.includes(status)) return res.status(400).json({ message: "Select a valid record type and overall status." });
+    if (!title || title.length > 160 || !validDate(clinicalDate) || !findings || !interpretation || !recommendations) return res.status(400).json({ message: "Title, clinical date, findings, physician interpretation and recommendations are required." });
+    if ([findings, interpretation, recommendations].some(value => value.length > 5000)) return res.status(400).json({ message: "Clinical record text must be 5,000 characters or fewer per section." });
+    if (followUpRequired && (!validDate(followUpDate) || followUpDate < clinicalDate)) return res.status(400).json({ message: "Select a valid follow-up date on or after the clinical date." });
+    const created = await prisma.clinicalRecord.create({
+      data: { patientId, physicianId: Number(req.user.id), type, title, clinicalDate: new Date(`${clinicalDate}T00:00:00.000Z`), findings, interpretation, recommendations, status, followUpRequired, followUpDate: followUpRequired ? new Date(`${followUpDate}T00:00:00.000Z`) : null },
+      include: { patient: { select: { name: true } }, physician: { select: { name: true } } },
+    });
+    const record = clinicalRecordView(created);
+    emitToUser(patientId, "clinical-record:created", record);
+    res.status(201).json({ record });
+  } catch (error) {
+    console.error("Create clinical record error:", error);
+    res.status(500).json({ message: "Unable to create clinical record." });
+  }
+});
+
 app.post("/api/caregiver/patients/:id/observation", auth, async (req, res) => {
   if (req.user.role !== "CAREGIVER") return res.status(403).json({ message: "Caregiver access required." });
   const patientId = Number(req.params.id);
@@ -467,23 +536,26 @@ app.get("/api/reports", auth, async (req, res) => {
 
     if (!patientIds.length) return res.json({ reports: [] });
 
-    const [medications, logs, vitals, appointments, alerts] = await Promise.all([
+    const [medications, logs, vitals, appointments, alerts, clinicalRecords, patients] = await Promise.all([
       prisma.medication.findMany({ where: { userId: { in: patientIds } }, include: { logs: true }, orderBy: { createdAt: "desc" } }),
       prisma.medicationLog.findMany({ where: { userId: { in: patientIds } }, orderBy: { scheduledAt: "desc" }, take: 100 }),
       prisma.vital.findMany({ where: { userId: { in: patientIds } }, orderBy: { recordedAt: "desc" }, take: 100 }),
       prisma.appointment.findMany({ where: { userId: { in: patientIds } }, orderBy: { id: "desc" }, take: 100 }),
       prisma.alert.findMany({ where: { userId: { in: patientIds } }, orderBy: { createdAt: "desc" }, take: 100 }),
+      prisma.clinicalRecord.findMany({ where: { patientId: { in: patientIds } }, include: { physician: { select: { name: true } } }, orderBy: [{ clinicalDate: "desc" }, { createdAt: "desc" }] }),
+      prisma.user.findMany({ where: { id: { in: patientIds }, role: "PATIENT" }, select: { id: true, name: true } }),
     ]);
 
     const reports = [];
     for (const patientId of patientIds) {
-      const patient = await prisma.user.findUnique({ where: { id: patientId }, select: { id: true, name: true } });
+      const patient = patients.find(item => item.id === patientId);
       if (!patient) continue;
       const pm = medications.filter(m => m.userId === patientId);
       const pl = logs.filter(l => l.userId === patientId);
       const pv = vitals.filter(v => v.userId === patientId);
       const pa = appointments.filter(a => a.userId === patientId);
       const pr = alerts.filter(a => a.userId === patientId);
+      const pc = clinicalRecords.filter(record => record.patientId === patientId);
       const taken = pl.filter(l => l.status === "TAKEN").length;
       const completed = pl.filter(l => l.status !== "PENDING").length;
       const adherence = completed ? Math.round((taken / completed) * 100) : 0;
@@ -520,6 +592,17 @@ app.get("/api/reports", auth, async (req, res) => {
         generatedOn: new Date().toLocaleDateString(),
         authoredBy: "HealthSync system",
         summary: `${patient.name} has ${upcoming} upcoming appointment(s) and ${openAlerts} unresolved alert(s) in the current record.`,
+      });
+      const latestClinical = pc[0];
+      if (latestClinical) reports.push({
+        id: `clinical-${patientId}`,
+        patientId,
+        patientName: patient.name,
+        title: "Clinical record summary",
+        category: "clinical",
+        generatedOn: latestClinical.clinicalDate.toLocaleDateString(),
+        authoredBy: latestClinical.physician?.name || "Connected physician",
+        summary: `Latest ${latestClinical.type.toLowerCase().replaceAll("_", " ")} record: ${latestClinical.title}. Status: ${latestClinical.status.toLowerCase().replaceAll("_", " ")}. Physician recommendation: ${latestClinical.recommendations}${latestClinical.followUpRequired ? ` Follow-up is recorded for ${latestClinical.followUpDate?.toLocaleDateString() || "a date to be confirmed"}.` : ""}`,
       });
     }
     res.json({ reports });

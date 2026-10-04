@@ -7,8 +7,8 @@ async function request<T>(path:string, options:RequestInit={}):Promise<T>{
   return data as T;
 }
 export interface CareTeamMember { id:number; name:string; email:string; role:"patient"|"caregiver"|"doctor"; }
-export interface PatientBundle { patient:any; medications:any[]; vitals:any[]; alerts:any[]; appointments:any[]; careTeam?:CareTeamMember[]; adherenceRate:number; }
-export interface ReportRecord { id:string; patientId:number; patientName:string; title:string; category:"adherence"|"vitals"|"consultation"|"lab"; generatedOn:string; authoredBy:string; summary:string; }
+export interface PatientBundle { patient:any; medications:any[]; vitals:any[]; alerts:any[]; appointments:any[]; clinicalRecords?:import("./clinicalRecordApi").ClinicalRecord[]; careTeam?:CareTeamMember[]; adherenceRate:number; }
+export interface ReportRecord { id:string; patientId:number; patientName:string; title:string; category:"adherence"|"vitals"|"consultation"|"lab"|"clinical"; generatedOn:string; authoredBy:string; summary:string; }
 export interface EmergencyRecord { id:number; patientId:number; patientName:string; message:string; active:boolean; createdAt:string; }
 export const roleDataApi={
  getPatients:(role:"caregiver"|"doctor")=>request<{patients:PatientBundle[]}>(`/${role === "doctor" ? "doctor" : "caregiver"}/patients`),
