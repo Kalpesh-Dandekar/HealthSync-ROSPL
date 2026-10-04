@@ -26,6 +26,14 @@ enum AlertSeverity {
   HIGH
 }
 
+enum AppointmentStatus {
+  REQUESTED
+  CONFIRMED
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
 model User {
   id                   Int              @id @default(autoincrement())
   name                 String
@@ -36,7 +44,10 @@ model User {
   medications          Medication[]
   medicationLogs       MedicationLog[]
   vitals               Vital[]
-  appointments         Appointment[]
+  patientAppointments  Appointment[]           @relation("PatientAppointments")
+  physicianAppointments Appointment[]           @relation("PhysicianAppointments")
+  physicianAvailability PhysicianAvailability[]
+  physicianUnavailablePeriods PhysicianUnavailablePeriod[]
   alerts               Alert[]
   patientConnections   CareConnection[] @relation("PatientConnections")
   caregiverConnections CareConnection[] @relation("CaregiverConnections")
@@ -78,14 +89,51 @@ model Vital {
 }
 
 model Appointment {
-  id     Int    @id @default(autoincrement())
-  userId Int
-  title  String
-  doctor String
-  date   String
-  time   String
-  status String @default("Scheduled")
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              Int               @id @default(autoincrement())
+  userId          Int
+  physicianId     Int?
+  title           String
+  doctor          String
+  date            String
+  time            String
+  scheduledAt     DateTime?
+  durationMinutes Int               @default(30)
+  reason          String?
+  status          AppointmentStatus @default(REQUESTED)
+  activeSlotKey   String?           @unique
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  user            User              @relation("PatientAppointments", fields: [userId], references: [id], onDelete: Cascade)
+  physician       User?             @relation("PhysicianAppointments", fields: [physicianId], references: [id], onDelete: SetNull)
+
+  @@index([userId, scheduledAt])
+  @@index([physicianId, scheduledAt])
+  @@index([status, scheduledAt])
+}
+
+model PhysicianAvailability {
+  id              Int  @id @default(autoincrement())
+  physicianId     Int
+  dayOfWeek       Int
+  startTime       String
+  endTime         String
+  slotDuration    Int  @default(30)
+  physician       User @relation(fields: [physicianId], references: [id], onDelete: Cascade)
+
+  @@unique([physicianId, dayOfWeek])
+  @@index([physicianId])
+}
+
+model PhysicianUnavailablePeriod {
+  id          Int      @id @default(autoincrement())
+  physicianId Int
+  startDate   String
+  endDate     String
+  reason      String?
+  createdAt   DateTime @default(now())
+  physician   User     @relation(fields: [physicianId], references: [id], onDelete: Cascade)
+
+  @@index([physicianId, startDate, endDate])
 }
 
 model Alert {

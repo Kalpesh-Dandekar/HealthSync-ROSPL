@@ -124,9 +124,69 @@
 .app-shell--doctor .care-network__notes { background: #f5f8f9 !important; }
 .app-shell--doctor .care-network__icon { color: #187d80; border-color: #cce0e2; background: #e0eeee; }
 .app-shell--doctor .care-network__empty { border-color: #c8dade; background: #eff6f7; }
-.doctor-appointments > .rounded-2xl:nth-of-type(1) { background: #edf5f8 !important; }
-.doctor-appointments > .rounded-2xl:nth-of-type(2) { background: #f6f9fa !important; }
-.doctor-appointments .rounded-xl.border.border-paper-200 { background: #f0f6f7; }
+.doctor-appointments { gap: .85rem; }
+.doctor-appointments > div:first-child { margin-bottom: .05rem; }
+.doctor-appointments .rounded-2xl { padding: 1rem; }
+.doctor-appointments .rounded-2xl > .mb-4 { margin-bottom: .65rem; }
+.doctor-appointments .rounded-2xl > .mb-4 h3 { font-size: .86rem; letter-spacing: -.015em; }
+.doctor-appointments .rounded-2xl > .mb-4 p { max-width: 38rem; font-size: .58rem; line-height: 1.45; }
+.doctor-today-card { position: relative; overflow: hidden; border-color: #b8d6da !important; background: linear-gradient(110deg,#e9f5f6,#f8fbfc 70%) !important; box-shadow: 0 14px 34px rgba(26,83,92,.09), inset 0 1px rgba(255,255,255,.9) !important; }
+.doctor-today-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: #2d9296; }
+.appointment-list { display: grid; gap: .5rem; }
+.doctor-appointment-row { position: relative; min-width: 0; padding: .68rem .75rem !important; gap: .65rem !important; border-color: #d3e2e5 !important; border-radius: .72rem !important; background: rgba(250,252,253,.88) !important; box-shadow: 0 4px 14px rgba(31,67,77,.035); }
+.doctor-appointment-row[data-status="REQUESTED"] { border-left: 3px solid #c6a34a !important; }
+.doctor-appointment-row[data-status="CONFIRMED"] { border-left: 3px solid #33999c !important; }
+.doctor-appointment-row[data-status="COMPLETED"] { border-left: 3px solid #62a17f !important; }
+.doctor-appointment-row[data-status="REJECTED"], .doctor-appointment-row[data-status="CANCELLED"] { border-left: 3px solid #a6b5b9 !important; }
+.doctor-appointment-row .appointment-row__summary { min-width: 0; align-items: center; gap: .65rem; }
+.doctor-appointment-row .appointment-row__icon { width: 2rem; height: 2rem; margin: 0; border-radius: .55rem; color: #237e82; background: #e1eff0; }
+.doctor-appointment-row .appointment-row__icon svg { width: .85rem; height: .85rem; }
+.doctor-appointment-row__identity { display: flex; align-items: baseline; flex-wrap: wrap; gap: .45rem; }
+.doctor-appointment-row__identity strong { color: #153942; font-size: .74rem; }
+.doctor-appointment-row__identity span { color: #29474f; font-size: .67rem; font-weight: 700; }
+.doctor-appointment-row__reason { max-width: 42rem; margin: .12rem 0 0; overflow: hidden; color: #637a80; font-size: .57rem; text-overflow: ellipsis; white-space: nowrap; }
+.doctor-appointment-row small { display: block; margin-top: .1rem; color: #819298; font-size: .5rem; }
+.doctor-appointment-row .appointment-row__actions { flex: 0 0 auto; gap: .35rem; }
+.doctor-appointment-row .inline-flex { padding: .19rem .42rem; font-size: .47rem; }
+.doctor-action { padding: .35rem .55rem; border: 1px solid transparent; border-radius: .48rem; font-size: .52rem; font-weight: 750; cursor: pointer; transition: border-color 160ms ease, background 160ms ease, color 160ms ease; }
+.doctor-action.is-confirm, .doctor-action.is-complete { color: #176c70; border-color: #a9ced1; background: #e4f2f2; }
+.doctor-action.is-confirm:hover, .doctor-action.is-complete:hover { background: #d7ebec; }
+.doctor-action.is-destructive { color: #985048; border-color: #e6c4bf; background: #faefed; }
+.doctor-action.is-destructive:hover { background: #f5e1de; }
+.doctor-appointments-empty { min-height: 3.6rem; display: flex; align-items: center; justify-content: center; gap: .6rem; border: 1px dashed #c6dadd; border-radius: .72rem; color: #6f858a; background: rgba(237,245,246,.72); }
+.doctor-appointments-empty > span { width: 1.85rem; height: 1.85rem; display: grid; place-items: center; border-radius: .55rem; color: #39868a; background: #deedef; }
+.doctor-appointments-empty svg { width: .82rem; height: .82rem; }
+.doctor-appointments-empty p { margin: 0; font-size: .58rem; }
+.doctor-schedule-grid { display: grid; grid-template-columns: minmax(0,1.45fr) minmax(17rem,.75fr); align-items: start; gap: .85rem; }
+.doctor-availability-card { background: #f5f9fa !important; }
+.doctor-availability-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .42rem; }
+.doctor-availability-day { min-width: 0; display: grid; grid-template-columns: 5.25rem minmax(0,1fr); align-items: center; gap: .5rem; min-height: 2.55rem; padding: .42rem .52rem; border: 1px solid #d9e5e7; border-radius: .62rem; background: #edf3f4; }
+.doctor-availability-day.is-enabled { border-color: #c4dadd; background: #f9fbfc; }
+.doctor-day-toggle { display: flex; align-items: center; gap: .38rem; color: #38545b; font-size: .57rem; font-weight: 750; cursor: pointer; }
+.doctor-day-toggle input { width: .8rem; height: .8rem; margin: 0; }
+.doctor-availability-day > p { margin: 0; color: #87979b; font-size: .51rem; }
+.doctor-availability-day__controls { min-width: 0; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .28rem; }
+.doctor-availability-day__controls label { min-width: 0; }
+.doctor-availability-day__controls label > span, .doctor-leave-form label > span { display: block; margin: 0 0 .15rem; color: #788b90; font-size: .44rem; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; }
+.doctor-availability-day__controls input, .doctor-availability-day__controls select { width: 100%; min-width: 0; height: 1.65rem; padding: 0 .28rem; border: 1px solid #cadbdd; border-radius: .4rem; font-size: .5rem; }
+.doctor-schedule-action { margin-top: .6rem; padding: .48rem .72rem; border: 0; border-radius: .55rem; color: white; background: #167a7d; font-size: .55rem; font-weight: 750; cursor: pointer; }
+.doctor-schedule-action:hover { background: #11676a; }
+.doctor-leave-card { background: #f8fafb !important; }
+.doctor-leave-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .42rem; }
+.doctor-leave-form label:nth-child(3), .doctor-leave-form > button { grid-column: 1/-1; }
+.doctor-leave-form input { width: 100%; height: 2rem; padding: 0 .55rem; border: 1px solid #cadbdd; border-radius: .5rem; font-size: .55rem; }
+.doctor-leave-form > button { height: 2rem; display: flex; align-items: center; justify-content: center; gap: .35rem; border: 0; border-radius: .5rem; color: white; background: #176f73; font-size: .54rem; font-weight: 750; cursor: pointer; }
+.doctor-leave-form > button svg { width: .72rem; height: .72rem; }
+.doctor-leave-list { display: grid; gap: .35rem; margin-top: .55rem; }
+.doctor-leave-list > div { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .45rem .5rem; border: 1px solid #d8e4e6; border-radius: .55rem; background: #f0f5f6; }
+.doctor-leave-list strong { display: block; color: #365159; font-size: .52rem; }
+.doctor-leave-list small { display: block; margin-top: .1rem; color: #7b8d92; font-size: .47rem; }
+.doctor-leave-list button { display: flex; align-items: center; gap: .25rem; padding: .28rem .4rem; border: 0; border-radius: .4rem; color: #99534b; background: #f7e9e7; font-size: .48rem; font-weight: 700; cursor: pointer; }
+.doctor-leave-list button svg { width: .62rem; height: .62rem; }
+.doctor-leave-list > p { margin: 0; padding: .65rem; border: 1px dashed #d3e0e2; border-radius: .55rem; color: #7d8f93; background: #f1f6f7; font-size: .53rem; text-align: center; }
+.doctor-upcoming-card { background: #f7fafb !important; }
+.doctor-history-card { border-color: #dae4e6 !important; background: #f1f5f6 !important; box-shadow: 0 8px 22px rgba(31,67,77,.04) !important; }
+.doctor-history-card .appointment-list { opacity: .88; }
 .doctor-reports > .space-y-4 { display: grid; gap: .75rem; }
 .doctor-reports > .space-y-4 > div { position: relative; overflow: hidden; padding-left: 1.35rem; }
 .doctor-reports > .space-y-4 > div::before { content: ""; position: absolute; inset: .8rem auto .8rem 0; width: 3px; border-radius: 999px; background: #359397; }
@@ -156,6 +216,7 @@
   .doctor-metrics { grid-template-columns: repeat(2,1fr); }
   .doctor-patient-row { grid-template-columns: auto minmax(12rem,1fr) minmax(12rem,.85fr) auto; }
   .doctor-patient-row__care { display: none; }
+  .doctor-schedule-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
   .doctor-connect-panel { grid-template-columns: auto 1fr; }
@@ -163,6 +224,7 @@
   .doctor-connect-panel__message { grid-column: 1/-1; }
   .doctor-patient-row { grid-template-columns: auto minmax(0,1fr) auto; }
   .doctor-patient-row__signals { grid-column: 2/-1; }
+  .doctor-availability-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 520px) {
   .doctor-metrics { grid-template-columns: 1fr; }
@@ -171,6 +233,8 @@
   .doctor-patient-row { align-items: start; }
   .doctor-patient-row__action { font-size: 0; }
   .doctor-patient-row__signals { grid-column: 1/-1; }
+  .doctor-availability-day { grid-template-columns: 1fr; }
+  .doctor-appointment-row .appointment-row__actions { padding-left: 2.65rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .app-shell--doctor *, .app-shell--doctor *::before, .app-shell--doctor *::after { transition-duration: .01ms !important; }

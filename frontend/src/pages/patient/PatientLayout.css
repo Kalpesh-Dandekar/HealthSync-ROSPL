@@ -187,6 +187,42 @@
 .patient-appointments > .rounded-2xl:nth-of-type(2) { background: #f1f7f4 !important; }
 .patient-appointments > .rounded-2xl:nth-of-type(3) { background: #fafbf9 !important; }
 .patient-appointments .rounded-xl.border.border-paper-200 { background: #f3f7f5; }
+.patient-booking-card { border-color: #cee0d7 !important; background: #f8fbf9 !important; }
+.patient-booking-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; }
+.patient-booking-grid label > span, .patient-booking-reason > span, .patient-slot-section > span { display: block; margin-bottom: .3rem; color: #557064; font-size: .55rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.patient-booking-grid select, .patient-booking-grid input, .patient-booking-reason textarea { width: 100%; border: 1px solid #cbdcd4; border-radius: .62rem; color: #253e34; background: #fbfdfc; font-size: .72rem; outline: none; }
+.patient-booking-grid select, .patient-booking-grid input { height: 2.55rem; padding: 0 .75rem; }
+.patient-booking-grid select:focus, .patient-booking-grid input:focus, .patient-booking-reason textarea:focus { border-color: #62a982; box-shadow: 0 0 0 3px rgba(78,170,128,.09); }
+.patient-slot-section { margin-top: .8rem; }
+.patient-slot-content { min-height: 3rem; display: flex; align-items: center; padding: .55rem .65rem; border: 1px solid #d5e3dc; border-radius: .68rem; background: #f0f6f3; }
+.patient-slot-content > p { margin: 0; color: #71847a; font-size: .62rem; }
+.patient-slot-content > p.is-loading { color: #3e7960; }
+.patient-slot-list { display: flex; flex-wrap: wrap; gap: .42rem; }
+.patient-slot-list button { min-width: 3.5rem; padding: .42rem .58rem; border: 1px solid #bfd5ca; border-radius: .52rem; color: #3b6250; background: #fbfdfc; font-size: .6rem; font-weight: 750; cursor: pointer; transition: border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease; }
+.patient-slot-list button:hover { border-color: #7eb296; background: #f2f8f5; }
+.patient-slot-list button.is-selected { color: #fff; border-color: #2e8059; background: #317f5b; box-shadow: 0 4px 12px rgba(42,111,77,.16); }
+.patient-booking-reason { display: block; margin-top: .8rem; }
+.patient-booking-reason textarea { min-height: 3.9rem; padding: .65rem .75rem; resize: vertical; }
+.patient-booking-submit { min-height: 2.45rem; display: flex; align-items: center; justify-content: center; gap: .4rem; margin-top: .8rem; padding: .55rem .85rem; border: 0; border-radius: .6rem; color: #fff; background: #287a55; font-size: .64rem; font-weight: 750; cursor: pointer; transition: background 160ms ease, opacity 160ms ease; }
+.patient-booking-submit svg { width: .78rem; height: .78rem; }
+.patient-booking-submit:hover:not(:disabled) { background: #206847; }
+.patient-booking-submit:disabled { color: #809087; background: #dbe5df; cursor: not-allowed; opacity: 1; }
+.patient-booking-feedback { margin: .45rem 0 0; color: #63796d; font-size: .58rem; }
+.patient-booking-feedback.is-error { color: #9b5148; }
+.patient-appointment-row { position: relative; overflow: hidden; }
+.patient-appointment-row[data-status="REQUESTED"] { border-left: 3px solid #c6a04e !important; }
+.patient-appointment-row[data-status="CONFIRMED"] { border-left: 3px solid #429176 !important; }
+.patient-appointment-row[data-status="COMPLETED"] { border-left: 3px solid #72a88a !important; }
+.patient-appointment-row[data-status="REJECTED"] { border-left: 3px solid #c98376 !important; }
+.patient-appointment-row[data-status="CANCELLED"] { border-left: 3px solid #a7b4ad !important; }
+.patient-appointments-empty { min-height: 3.6rem; display: flex; align-items: center; justify-content: center; gap: .55rem; padding: .65rem; border: 1px dashed #ceded6; border-radius: .7rem; color: #6c8176; background: rgba(239,246,242,.72); }
+.patient-appointments-empty svg { width: .9rem; height: .9rem; color: #579072; }
+.patient-appointments-empty p { margin: 0; font-size: .62rem; }
+
+@media (max-width: 640px) {
+  .patient-booking-grid { grid-template-columns: 1fr; }
+  .patient-booking-submit { width: 100%; }
+}
 
 /* Reports read as healthcare documents rather than dark strips. */
 .patient-reports > .space-y-4 { display: grid; gap: .75rem; }

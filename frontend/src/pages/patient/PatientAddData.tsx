@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Activity, CalendarDays, CheckCircle2, Pill, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { patientDataApi, type AppointmentRecord, type MedicationRecord, type VitalRecord } from "../../api/patientData";
 
 const inputClass = "h-11 w-full rounded-xl border border-paper-200 bg-paper-50 px-3 text-sm text-charcoal-900 outline-none transition placeholder:text-charcoal-500 focus:border-ink-600";
@@ -13,7 +14,6 @@ export function PatientAddData() {
 
   const [med, setMed] = useState({ name: "", dosage: "", schedule: "", stock: "0" });
   const [vital, setVital] = useState({ heartRate: "", systolic: "", diastolic: "", glucose: "" });
-  const [appointment, setAppointment] = useState({ title: "", doctor: "", date: "", time: "" });
 
   async function load() {
     try {
@@ -105,13 +105,8 @@ export function PatientAddData() {
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-ink-100 text-ink-600"><CalendarDays className="h-5 w-5" /></span>
             <div><h2 className="font-semibold text-charcoal-900">Book appointment</h2><p className="text-[11px] text-charcoal-500">Add your next visit</p></div>
           </div>
-          <form className="mt-4 space-y-3" onSubmit={(e) => submit(e, () => patientDataApi.addAppointment(appointment), () => setAppointment({ title: "", doctor: "", date: "", time: "" }))}>
-            <input className={inputClass} placeholder="Appointment title" value={appointment.title} onChange={e => setAppointment({ ...appointment, title: e.target.value })} required />
-            <input className={inputClass} placeholder="Doctor name" value={appointment.doctor} onChange={e => setAppointment({ ...appointment, doctor: e.target.value })} required />
-            <input className={inputClass} type="date" value={appointment.date} onChange={e => setAppointment({ ...appointment, date: e.target.value })} required />
-            <input className={inputClass} type="time" value={appointment.time} onChange={e => setAppointment({ ...appointment, time: e.target.value })} required />
-            <button disabled={busy} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-ink-800 text-sm font-bold text-white hover:bg-ink-700 disabled:opacity-60"><CheckCircle2 className="h-4 w-4" /> Save appointment</button>
-          </form>
+          <p className="mt-4 text-xs leading-5 text-charcoal-500">Appointments are requested from registered physicians using their published availability.</p>
+          <Link to="/patient/appointments" className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-ink-800 text-sm font-bold text-white hover:bg-ink-700"><CalendarDays className="h-4 w-4" /> Open appointments</Link>
           <div className="mt-4 space-y-2">
             {appointments.map(item => <div key={item.id} className="rounded-xl border border-paper-200 bg-paper-50 p-3">
               <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><p className="text-xs font-semibold text-charcoal-900">{item.title}</p><p className="text-[10px] text-charcoal-500">{item.doctor} · {item.date} at {item.time}</p></div><span className="text-[9px] font-bold uppercase text-ink-500">{item.status}</span></div>

@@ -28,7 +28,7 @@ export function DoctorPatientList() {
 
   const attentionCount = patients.filter((bundle) => bundle.adherenceRate < 80 || bundle.alerts.some((alert) => !alert.read && !alert.acknowledged)).length;
   const activeAlerts = patients.reduce((count, bundle) => count + bundle.alerts.filter((alert) => !alert.read && !alert.acknowledged).length, 0);
-  const upcomingCount = patients.reduce((count, bundle) => count + bundle.appointments.filter((appointment) => appointment.status === "upcoming" || appointment.status === "Scheduled" || appointment.status === "Confirmed").length, 0);
+  const upcomingCount = patients.reduce((count, bundle) => count + bundle.appointments.filter((appointment) => ["upcoming", "Scheduled", "Confirmed", "REQUESTED", "CONFIRMED"].includes(appointment.status)).length, 0);
 
   return (
     <div className="doctor-workspace-page doctor-overview">
@@ -61,7 +61,7 @@ export function DoctorPatientList() {
             {patients.map((bundle) => {
               const latestVital = bundle.vitals[0];
               const openAlerts = bundle.alerts.filter((alert) => !alert.read && !alert.acknowledged).length;
-              const nextAppointment = bundle.appointments.find((appointment) => appointment.status === "upcoming" || appointment.status === "Scheduled" || appointment.status === "Confirmed");
+              const nextAppointment = bundle.appointments.find((appointment) => ["upcoming", "Scheduled", "Confirmed", "REQUESTED", "CONFIRMED"].includes(appointment.status));
               return (
                 <button key={bundle.patient.id} onClick={() => navigate(`/doctor/patients/${bundle.patient.id}`)} className="doctor-patient-row">
                   <span className="doctor-patient-row__avatar">{String(bundle.patient.name || "P").charAt(0).toUpperCase()}</span>

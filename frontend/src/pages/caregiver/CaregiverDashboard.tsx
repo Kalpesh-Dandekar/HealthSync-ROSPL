@@ -34,7 +34,7 @@ export function CaregiverDashboard() {
   const feed = medicines.flatMap((medicine) => medicine.doses.map((dose) => ({ medicine: medicine.name, dosage: medicine.dosage, ...dose })));
   const attentionCount = patients.filter((bundle) => bundle.adherenceRate < 80 || bundle.alerts.some((alert) => !alert.read)).length;
   const activeAlertCount = patients.reduce((count, bundle) => count + bundle.alerts.filter((alert) => !alert.read).length, 0);
-  const upcomingCount = patients.reduce((count, bundle) => count + bundle.appointments.filter((appointment) => appointment.status === "upcoming" || appointment.status === "Scheduled" || appointment.status === "Confirmed").length, 0);
+  const upcomingCount = patients.reduce((count, bundle) => count + bundle.appointments.filter((appointment) => ["upcoming", "Scheduled", "Confirmed", "REQUESTED", "CONFIRMED"].includes(appointment.status)).length, 0);
 
   const submitObservation = async () => {
     if (!observation.trim() || !selected) return;

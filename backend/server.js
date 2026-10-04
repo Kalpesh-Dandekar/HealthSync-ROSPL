@@ -2,9 +2,6 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import http from "http";
-import { spawn } from "child_process";
-import path from "path";
-import { fileURLToPath } from "url";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { PrismaClient } from "./generated/prisma/client.ts";
@@ -17,8 +14,6 @@ if (!connectionString) throw new Error("DATABASE_URL is missing in backend/.env"
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 const app = express();
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const httpServer = http.createServer(app);
 const PORT = Number(process.env.PORT || 5000);
 const JWT_SECRET = process.env.JWT_SECRET?.trim();
@@ -39,47 +34,7 @@ app.use(cors({ origin: (origin, callback) => callback(null, !origin || allowedOr
 app.use(express.json());
 
 
-const schedulerCatalog = [
-  { clinic: "HealthSync Central Clinic", doctor: "Dr. Mehta", accessible: true, mode: "in_person", distance: 4, sensory: { light: "good", noise: "good" }, slots: ["09:00", "10:00", "11:00", "14:00", "15:00"] },
-  { clinic: "HealthSync Care Centre", doctor: "Dr. Shah", accessible: true, mode: "in_person", distance: 7, sensory: { light: "good", noise: "bad" }, slots: ["09:30", "11:30", "13:00", "15:30", "16:30"] },
-  { clinic: "HealthSync Community Clinic", doctor: "Dr. Patil", accessible: false, mode: "in_person", distance: 2, sensory: { light: "bad", noise: "good" }, slots: ["10:30", "12:30", "14:30", "16:00"] },
-  { clinic: "HealthSync Telehealth", doctor: "Dr. Rao", accessible: true, mode: "telemedicine", distance: 0, sensory: { light: "good", noise: "good" }, slots: ["09:00", "12:00", "15:00", "17:00"] },
-];
-
-function slotDateList(startDate, days = 7) {
-  const out = []; const start = new Date(startDate || Date.now());
-  for (let i = 0; i < days; i++) { const d = new Date(start); d.setDate(start.getDate() + i); if (d.getDay() !== 0) out.push(d.toISOString().slice(0,10)); }
-  return out;
-}
 function toMinutes(hhmm) { const [h,m]=hhmm.split(":").map(Number); return h*60+m; }
-function fallbackSchedule({ request, appointments }) {
-  const dates=slotDateList(request.date, 7); const occupied=new Set(appointments.filter(a=>a.status!=="Cancelled").map(a=>`${a.date}|${a.time}`));
-  const prefStart=toMinutes(request.preferredStart || "00:00"), prefEnd=toMinutes(request.preferredEnd || "23:59");
-  const scored=[];
-  for(const c of schedulerCatalog){
-    if(request.mode === "in_person" && c.mode === "telemedicine") continue;
-    if(request.mode === "video" && c.mode !== "telemedicine") continue;
-    if(request.accessibilityRequired && !c.accessible) continue;
-    for(const date of dates) for(const time of c.slots){
-      if(occupied.has(`${date}|${time}`)) continue;
-      const mins=toMinutes(time); let score=c.distance*10;
-      if(request.preferredClinic && c.clinic!==request.preferredClinic) score+=100;
-      if(request.preferredDoctor && c.doctor!==request.preferredDoctor) score+=50;
-      if(request.preferredStart && (mins<prefStart || mins>prefEnd)) score+=25;
-      if(request.sensoryPreference && c.sensory[request.sensoryPreference]==="bad") score+=100;
-      if(request.urgency>=3) score-=Math.max(0, 1000-(dates.indexOf(date)*100+mins));
-      scored.push({date,time,clinic:c.clinic,doctor:c.doctor,mode:c.mode,distanceKm:c.distance,score});
-    }
-  }
-  return scored.sort((a,b)=>a.score-b.score).slice(0,5);
-}
-async function solveWithClingo(facts) {
-  return new Promise((resolve,reject)=>{
-    const script=path.join(__dirname,"scheduler","solve.py"); const child=spawn("python",[script],{cwd:__dirname}); let out="",err="";
-    child.stdout.on("data",d=>out+=d); child.stderr.on("data",d=>err+=d); child.on("error",reject); child.on("close",code=>{ if(code!==0) return reject(new Error(err||"Clingo scheduler unavailable")); try{resolve(JSON.parse(out));}catch(e){reject(e);} });
-    child.stdin.end(JSON.stringify({facts}));
-  });
-}
 
 function publicUser(user) {
   return {
@@ -244,6 +199,48 @@ function emitToUser(userId, event, payload) {
   });
 }
 
+const APPOINTMENT_ACTIVE = ["REQUESTED", "CONFIRMED"];
+const APPOINTMENT_TRANSITIONS = {
+  REQUESTED: ["CONFIRMED", "REJECTED", "CANCELLED"],
+  CONFIRMED: ["COMPLETED", "CANCELLED"],
+};
+function validDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")); }
+function validTime(value) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || "")); }
+// Appointment date/time fields are local clinic wall-clock values (Asia/Kolkata);
+// scheduledAt stores the corresponding absolute instant for consistent querying.
+function schedulingInstant(date, time) { return new Date(`${date}T${time}:00+05:30`); }
+function schedulingNowKey() {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date()).filter(part => part.type !== "literal").map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}|${parts.hour}:${parts.minute}`;
+}
+function activeSlotKey(physicianId, date, time) { return `${physicianId}:${date}:${time}`; }
+function appointmentView(a) {
+  return { ...a, reason: a.reason || a.title, patientName: a.user?.name, physicianName: a.physician?.name || a.doctor };
+}
+async function slotResult(physicianId, date) {
+  const physician = await prisma.user.findFirst({ where: { id: physicianId, role: "PHYSICIAN" }, select: { id: true, name: true } });
+  if (!physician) return { error: "Physician not found." };
+  if (!validDate(date)) return { error: "A valid date is required." };
+  const today = schedulingNowKey().slice(0, 10);
+  if (date < today) return { physician, slots: [], message: "Past dates cannot be booked." };
+  const leave = await prisma.physicianUnavailablePeriod.findFirst({ where: { physicianId, startDate: { lte: date }, endDate: { gte: date } }, orderBy: { startDate: "asc" } });
+  if (leave) return { physician, slots: [], unavailable: leave, message: `${physician.name} is unavailable from ${leave.startDate} to ${leave.endDate}.` };
+  const dayOfWeek = schedulingInstant(date, "12:00").getUTCDay();
+  const availability = await prisma.physicianAvailability.findUnique({ where: { physicianId_dayOfWeek: { physicianId, dayOfWeek } } });
+  if (!availability) return { physician, slots: [], message: "This physician has not published availability for this day." };
+  const occupied = await prisma.appointment.findMany({ where: { physicianId, date, status: { in: APPOINTMENT_ACTIVE } }, select: { time: true } });
+  const occupiedTimes = new Set(occupied.map(a => a.time));
+  const start = toMinutes(availability.startTime), end = toMinutes(availability.endTime), nowKey = schedulingNowKey();
+  const slots = [];
+  for (let minute = start; minute + availability.slotDuration <= end; minute += availability.slotDuration) {
+    const time = `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+    if (occupiedTimes.has(time)) continue;
+    if (`${date}|${time}` <= nowKey) continue;
+    slots.push(time);
+  }
+  return { physician, availability, slots, message: slots.length ? null : "No slots are available on this date." };
+}
+
 
 // ---------------- Caregiver / Physician views ----------------
 app.get("/api/caregiver/patients", auth, async (req, res) => {
@@ -281,15 +278,14 @@ app.get("/api/doctor/patients/:id", auth, async (req, res) => {
 app.get("/api/role/appointments", auth, async (req, res) => {
   let appointments = [];
   if (req.user.role === "PATIENT") {
-    appointments = await prisma.appointment.findMany({ where: { userId: Number(req.user.id) }, orderBy: { id: "desc" } });
+    appointments = await prisma.appointment.findMany({ where: { userId: Number(req.user.id) }, include: { user: { select: { name: true } }, physician: { select: { name: true } } }, orderBy: { id: "desc" } });
+  } else if (req.user.role === "PHYSICIAN") {
+    appointments = await prisma.appointment.findMany({ where: { physicianId: Number(req.user.id) }, include: { user: { select: { name: true } }, physician: { select: { name: true } } }, orderBy: { id: "desc" } });
   } else {
-    const ids = await getAssignedPatientIds(Number(req.user.id), req.user.role);
-    appointments = await prisma.appointment.findMany({ where: { userId: { in: ids } }, orderBy: { id: "desc" } });
+    const ids = await getAssignedPatientIds(Number(req.user.id), "CAREGIVER");
+    appointments = await prisma.appointment.findMany({ where: { userId: { in: ids } }, include: { user: { select: { name: true } }, physician: { select: { name: true } } }, orderBy: { id: "desc" } });
   }
-  const ids = [...new Set(appointments.map(a => a.userId))];
-  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
-  const names = new Map(users.map(u => [u.id, u.name]));
-  res.json({ appointments: appointments.map(a => ({ ...a, patientName: names.get(a.userId) || "Patient" })) });
+  res.json({ appointments: appointments.map(appointmentView) });
 });
 
 app.get("/api/handoff-notes", auth, async (req, res) => {
@@ -447,7 +443,15 @@ app.post("/api/doctor/patients/:id/appointments", auth, async (req, res) => {
   const date = String(req.body?.date || "").trim();
   const time = String(req.body?.time || "").trim();
   if (!date || !time) return res.status(400).json({ message: "Date and time are required." });
-  const appointment = await prisma.appointment.create({ data: { userId: patientId, title, doctor: req.user.name, date, time, status: "Scheduled" } });
+  const slots = await slotResult(Number(req.user.id), date);
+  if (!slots.slots?.includes(time)) return res.status(409).json({ message: "This time slot is not available in your published schedule." });
+  let appointment;
+  try {
+    appointment = await prisma.appointment.create({ data: { userId: patientId, physicianId: Number(req.user.id), title, reason: title, doctor: req.user.name, date, time, scheduledAt: schedulingInstant(date, time), durationMinutes: slots.availability.slotDuration, status: "CONFIRMED", activeSlotKey: activeSlotKey(Number(req.user.id), date, time) } });
+  } catch (error) {
+    if (error?.code === "P2002") return res.status(409).json({ message: "This time slot is no longer available." });
+    throw error;
+  }
   const alert = await prisma.alert.create({ data: { userId: patientId, type: "appointment", message: `Appointment scheduled by Dr. ${req.user.name} for ${date} at ${time}.`, severity: "INFO" } });
   emitToUser(patientId, "appointment:created", appointment);
   emitToUser(patientId, "alert:created", alert);
@@ -973,92 +977,115 @@ app.post("/api/vitals", auth, async (req, res) => {
 
 
 app.post("/api/appointments/optimize", auth, async (req, res) => {
-  try {
-    const r=req.body||{};
-    const request={
-      title:String(r.title||"Medical consultation"), mode:String(r.mode||"in_person"), urgency:Math.max(1,Math.min(3,Number(r.urgency||1))),
-      date:String(r.date||new Date().toISOString().slice(0,10)), preferredClinic:String(r.preferredClinic||""), preferredDoctor:String(r.preferredDoctor||""),
-      preferredStart:String(r.preferredStart||""), preferredEnd:String(r.preferredEnd||""), accessibilityRequired:Boolean(r.accessibilityRequired), sensoryPreference:String(r.sensoryPreference||"")
-    };
-    const patientId=Number(req.user.id);
-    const appointments=await prisma.appointment.findMany({where:{userId:patientId},select:{date:true,time:true,status:true}});
-    let suggestions=[]; let engine="fallback";
-    try {
-      const facts=[]; facts.push(`request(p1,consultation).`); facts.push(`urgency(p1,${request.urgency}).`); facts.push(`requested_after(p1,0).`);
-      if(request.accessibilityRequired) facts.push("needs_accessibility(p1)."); if(request.preferredClinic) facts.push(`preferred_clinic(p1,${JSON.stringify(request.preferredClinic)}).`); if(request.preferredDoctor) facts.push(`preferred_doctor(p1,${JSON.stringify(request.preferredDoctor)}).`);
-      for(const c of schedulerCatalog){ facts.push(`clinic(${JSON.stringify(c.clinic)}). doctor(${JSON.stringify(c.doctor)}).`); facts.push(`accessible(${JSON.stringify(c.clinic)}).`); facts.push(`clinic_mode(${JSON.stringify(c.clinic)},${c.mode}).`); facts.push(`distance(p1,${JSON.stringify(c.clinic)},${c.distance}).`); for(const date of slotDateList(request.date,7)) for(const t of c.slots) { const ts=Date.parse(`${date}T${t}:00`); facts.push(`availability(${JSON.stringify(c.clinic)},${JSON.stringify(c.doctor)},consultation,${ts}).`); } }
-      for(const a of appointments){ const c=schedulerCatalog.find(x=>x.doctor===a.doctor); if(c){ const ts=Date.parse(`${a.date}T${a.time}:00`); facts.push(`occupied(${JSON.stringify(c.clinic)},${JSON.stringify(a.doctor)},${ts}).`); } }
-      if(request.sensoryPreference) { facts.push(`sensory_preference(p1,${JSON.stringify(request.sensoryPreference)}).`); for(const c of schedulerCatalog) facts.push(`environment_condition(${JSON.stringify(c.clinic)},${JSON.stringify(request.sensoryPreference)},${c.sensory[request.sensoryPreference]==="bad"?"bad":"good"},0).`); }
-      const solved=await solveWithClingo(facts.join("\n"));
-      if(solved.ok) { engine="clingo-asp"; suggestions=solved.atoms.filter(a=>a.startsWith("selected(")).map(atom=>{ const m=atom.match(/^selected\((.+),(.+),(.+),consultation,(\d+)\)$/); if(!m)return null; const clinic=JSON.parse(m[2]), doctor=JSON.parse(m[3]), d=new Date(Number(m[4])); return {date:d.toISOString().slice(0,10),time:d.toISOString().slice(11,16),clinic,doctor,mode:clinic.includes("Telehealth")?"video":"in_person",engine}; }).filter(Boolean); }
-    } catch (_) {}
-    if(!suggestions.length) suggestions=fallbackSchedule({request,appointments}).map(x=>({...x,engine}));
-    res.json({engine,suggestions:suggestions.slice(0,5),criteria:{urgency:request.urgency,accessibilityRequired:request.accessibilityRequired,preferredClinic:request.preferredClinic||null,preferredDoctor:request.preferredDoctor||null,sensoryPreference:request.sensoryPreference||null}});
-  } catch(error){ console.error("Appointment optimizer error:",error); res.status(500).json({message:"Unable to optimize appointment slots."}); }
+  if (req.user.role !== "PATIENT") return res.status(403).json({ message: "Patient access required." });
+  const physicianId = Number(req.body?.physicianId), date = String(req.body?.date || "");
+  const result = await slotResult(physicianId, date);
+  if (result.error) return res.status(400).json({ message: result.error });
+  res.json({ engine: "database-availability", suggestions: result.slots.map(time => ({ date, time, physicianId, doctor: result.physician.name })), criteria: { physicianId, date } });
+});
+
+app.get("/api/physicians", auth, async (req, res) => {
+  if (req.user.role !== "PATIENT") return res.status(403).json({ message: "Patient access required." });
+  const physicians = await prisma.user.findMany({ where: { role: "PHYSICIAN" }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  res.json({ physicians });
+});
+
+app.get("/api/physicians/:id/slots", auth, async (req, res) => {
+  if (req.user.role !== "PATIENT") return res.status(403).json({ message: "Patient access required." });
+  const result = await slotResult(Number(req.params.id), String(req.query.date || ""));
+  if (result.error) return res.status(400).json({ message: result.error });
+  res.json(result);
+});
+
+app.get("/api/physician/availability", auth, async (req, res) => {
+  if (req.user.role !== "PHYSICIAN") return res.status(403).json({ message: "Physician access required." });
+  const availability = await prisma.physicianAvailability.findMany({ where: { physicianId: Number(req.user.id) }, orderBy: { dayOfWeek: "asc" } });
+  res.json({ availability });
+});
+
+app.put("/api/physician/availability", auth, async (req, res) => {
+  if (req.user.role !== "PHYSICIAN") return res.status(403).json({ message: "Physician access required." });
+  const rows = Array.isArray(req.body?.availability) ? req.body.availability : [];
+  const clean = rows.map(row => ({ dayOfWeek: Number(row.dayOfWeek), startTime: String(row.startTime || ""), endTime: String(row.endTime || ""), slotDuration: Number(row.slotDuration || 30) }));
+  if (clean.some(row => row.dayOfWeek < 0 || row.dayOfWeek > 6 || !validTime(row.startTime) || !validTime(row.endTime) || toMinutes(row.startTime) >= toMinutes(row.endTime) || ![15, 30, 45, 60].includes(row.slotDuration))) return res.status(400).json({ message: "Availability contains an invalid day, time range or slot duration." });
+  const physicianId = Number(req.user.id);
+  await prisma.$transaction(async tx => { await tx.physicianAvailability.deleteMany({ where: { physicianId } }); if (clean.length) await tx.physicianAvailability.createMany({ data: clean.map(row => ({ ...row, physicianId })) }); });
+  const availability = await prisma.physicianAvailability.findMany({ where: { physicianId }, orderBy: { dayOfWeek: "asc" } });
+  res.json({ availability });
+});
+
+app.get("/api/physician/unavailable-periods", auth, async (req, res) => {
+  if (req.user.role !== "PHYSICIAN") return res.status(403).json({ message: "Physician access required." });
+  const periods = await prisma.physicianUnavailablePeriod.findMany({ where: { physicianId: Number(req.user.id) }, orderBy: { startDate: "asc" } });
+  res.json({ periods });
+});
+
+app.post("/api/physician/unavailable-periods", auth, async (req, res) => {
+  if (req.user.role !== "PHYSICIAN") return res.status(403).json({ message: "Physician access required." });
+  const startDate = String(req.body?.startDate || ""), endDate = String(req.body?.endDate || ""), reason = String(req.body?.reason || "").trim();
+  if (!validDate(startDate) || !validDate(endDate) || endDate < startDate) return res.status(400).json({ message: "A valid unavailable date range is required." });
+  const period = await prisma.physicianUnavailablePeriod.create({ data: { physicianId: Number(req.user.id), startDate, endDate, reason: reason || null } });
+  res.status(201).json({ period });
+});
+
+app.delete("/api/physician/unavailable-periods/:id", auth, async (req, res) => {
+  if (req.user.role !== "PHYSICIAN") return res.status(403).json({ message: "Physician access required." });
+  const deleted = await prisma.physicianUnavailablePeriod.deleteMany({ where: { id: Number(req.params.id), physicianId: Number(req.user.id) } });
+  if (!deleted.count) return res.status(404).json({ message: "Unavailable period not found." });
+  res.json({ success: true });
 });
 
 app.get("/api/appointments", auth, async (req, res) => {
   try {
-    let appointments;
-    if (req.user.role === "PATIENT") {
-      appointments = await prisma.appointment.findMany({ where: { userId: Number(req.user.id) }, orderBy: { id: "desc" } });
-    } else {
-      const ids = await getAssignedPatientIds(Number(req.user.id), req.user.role);
-      appointments = await prisma.appointment.findMany({ where: { userId: { in: ids } }, orderBy: { id: "desc" } });
-    }
-    res.json({ appointments });
+    let where;
+    if (req.user.role === "PATIENT") where = { userId: Number(req.user.id) };
+    else if (req.user.role === "PHYSICIAN") where = { physicianId: Number(req.user.id) };
+    else where = { userId: { in: await getAssignedPatientIds(Number(req.user.id), "CAREGIVER") } };
+    const appointments = await prisma.appointment.findMany({ where, include: { user: { select: { id: true, name: true } }, physician: { select: { id: true, name: true } } }, orderBy: [{ date: "asc" }, { time: "asc" }] });
+    res.json({ appointments: appointments.map(appointmentView) });
   } catch (error) { console.error("Get appointments error:", error); res.status(500).json({ message: "Unable to load appointments." }); }
 });
 
 app.post("/api/appointments", auth, async (req, res) => {
+  if (req.user.role !== "PATIENT") return res.status(403).json({ message: "Only patients can request appointments." });
   try {
-    const { title, doctor, date, time } = req.body || {};
-    const cleanTitle = String(title || "").trim(), cleanDoctor = String(doctor || "").trim(), cleanDate = String(date || "").trim(), cleanTime = String(time || "").trim();
-    if (!cleanTitle || !cleanDoctor || !cleanDate || !cleanTime) return res.status(400).json({ message: "Title, doctor, date and time are required." });
-    let patientId = Number(req.user.id);
-    if (req.user.role === "CAREGIVER") {
-      const ids = await getAssignedPatientIds(Number(req.user.id), "CAREGIVER");
-      const requestedPatientId = Number(req.body?.patientId || 0);
-      if (!ids.length) return res.status(403).json({ message: "No connected patient to book an appointment for." });
-      patientId = requestedPatientId && ids.includes(requestedPatientId) ? requestedPatientId : ids[0];
-    } else if (req.user.role === "PHYSICIAN") {
-      return res.status(403).json({ message: "Physicians review appointments rather than booking them from this screen." });
-    }
-    const appointment = await prisma.appointment.create({ data: { userId: patientId, title: cleanTitle, doctor: cleanDoctor, date: cleanDate, time: cleanTime } });
-    emitToUser(patientId, "appointment:created", appointment);
-    res.status(201).json({ appointment });
-  } catch (error) { console.error("Create appointment error:", error); res.status(500).json({ message: "Unable to save appointment." }); }
+    const physicianId = Number(req.body?.physicianId), date = String(req.body?.date || ""), time = String(req.body?.time || ""), reason = String(req.body?.reason || "").trim();
+    if (!physicianId || !validDate(date) || !validTime(time) || !reason) return res.status(400).json({ message: "Physician, date, available time and reason are required." });
+    const result = await slotResult(physicianId, date);
+    if (result.error) return res.status(400).json({ message: result.error });
+    if (!result.slots.includes(time)) return res.status(409).json({ message: "This time slot is no longer available. Please choose another." });
+    const appointment = await prisma.appointment.create({ data: { userId: Number(req.user.id), physicianId, title: reason, reason, doctor: result.physician.name, date, time, scheduledAt: schedulingInstant(date, time), durationMinutes: result.availability.slotDuration, status: "REQUESTED", activeSlotKey: activeSlotKey(physicianId, date, time) }, include: { user: { select: { id: true, name: true } }, physician: { select: { id: true, name: true } } } });
+    emitToUser(Number(req.user.id), "appointment:created", appointment);
+    emitToUser(physicianId, "appointment:created", appointment);
+    res.status(201).json({ appointment: appointmentView(appointment) });
+  } catch (error) {
+    if (error?.code === "P2002") return res.status(409).json({ message: "This time slot is no longer available. Please choose another." });
+    console.error("Create appointment error:", error); res.status(500).json({ message: "Unable to request appointment." });
+  }
 });
 
 app.patch("/api/appointments/:id/status", auth, async (req, res) => {
-  try {
-    if (req.user.role !== "PHYSICIAN") return res.status(403).json({ message: "Physician access required." });
-    const id = Number(req.params.id);
-    const status = String(req.body?.status || "").trim();
-    if (!["Scheduled", "Confirmed", "Completed", "Cancelled"].includes(status)) return res.status(400).json({ message: "Invalid appointment status." });
-    const existing = await prisma.appointment.findUnique({ where: { id } });
-    if (!existing) return res.status(404).json({ message: "Appointment not found." });
-    if (!(await requireAssigned(req, res, existing.userId))) return res.status(403).json({ message: "You are not connected to this patient." });
-    const appointment = await prisma.appointment.update({ where: { id }, data: { status } });
-    const alert = await prisma.alert.create({ data: { userId: existing.userId, type: "appointment", message: `Appointment ${status.toLowerCase()} by Dr. ${req.user.name}.`, severity: "INFO" } });
-    emitToUser(existing.userId, "appointment:updated", appointment);
-    emitToUser(existing.userId, "alert:created", alert);
-    res.json({ appointment });
-  } catch (error) { console.error("Update appointment status error:", error); res.status(500).json({ message: "Unable to update appointment status." }); }
+  if (req.user.role !== "PHYSICIAN") return res.status(403).json({ message: "Physician access required." });
+  const existing = await prisma.appointment.findUnique({ where: { id: Number(req.params.id) } });
+  if (!existing) return res.status(404).json({ message: "Appointment not found." });
+  if (existing.physicianId !== Number(req.user.id)) return res.status(403).json({ message: "This appointment is not assigned to you." });
+  const status = String(req.body?.status || "").toUpperCase();
+  if (!(APPOINTMENT_TRANSITIONS[existing.status] || []).includes(status)) return res.status(409).json({ message: `Appointment cannot move from ${existing.status} to ${status}.` });
+  const appointment = await prisma.appointment.update({ where: { id: existing.id }, data: { status, ...(["COMPLETED", "REJECTED", "CANCELLED"].includes(status) ? { activeSlotKey: null } : {}) } });
+  const alert = await prisma.alert.create({ data: { userId: existing.userId, type: "appointment", message: `Appointment ${status.toLowerCase()} by ${req.user.name}.`, severity: "INFO" } });
+  emitToUser(existing.userId, "appointment:updated", appointment); emitToUser(existing.userId, "alert:created", alert);
+  res.json({ appointment });
 });
 
 app.patch("/api/appointments/:id/cancel", auth, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const existing = await prisma.appointment.findUnique({ where: { id } });
-    if (!existing) return res.status(404).json({ message: "Appointment not found." });
-    let allowed = existing.userId === Number(req.user.id);
-    if (!allowed && ["CAREGIVER", "PHYSICIAN"].includes(req.user.role)) allowed = await requireAssigned(req, res, existing.userId);
-    if (!allowed) return res.status(403).json({ message: "You do not have access to this appointment." });
-    const appointment = await prisma.appointment.update({ where: { id }, data: { status: "Cancelled" } });
-    emitToUser(existing.userId, "appointment:updated", appointment);
-    res.json({ appointment });
-  } catch (error) { console.error("Cancel appointment error:", error); res.status(500).json({ message: "Unable to cancel appointment." }); }
+  if (req.user.role !== "PATIENT") return res.status(403).json({ message: "Only the patient can cancel this appointment." });
+  const existing = await prisma.appointment.findUnique({ where: { id: Number(req.params.id) } });
+  if (!existing) return res.status(404).json({ message: "Appointment not found." });
+  if (existing.userId !== Number(req.user.id)) return res.status(403).json({ message: "You do not have access to this appointment." });
+  if (!APPOINTMENT_ACTIVE.includes(existing.status)) return res.status(409).json({ message: `A ${existing.status.toLowerCase()} appointment cannot be cancelled.` });
+  const appointment = await prisma.appointment.update({ where: { id: existing.id }, data: { status: "CANCELLED", activeSlotKey: null } });
+  emitToUser(existing.userId, "appointment:updated", appointment); if (existing.physicianId) emitToUser(existing.physicianId, "appointment:updated", appointment);
+  res.json({ appointment });
 });
 
 io.use((socket, next) => {

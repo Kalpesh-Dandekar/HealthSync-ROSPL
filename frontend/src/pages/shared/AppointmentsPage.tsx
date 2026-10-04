@@ -1,265 +1,65 @@
-import { useEffect, useState } from "react";
-import { Calendar, MapPin, Plus, Video, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Calendar, CalendarCheck2, CalendarOff, Clock3, Plus, Trash2 } from "lucide-react";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
-import { useAppData } from "../../data/AppDataContext";
 import type { UserRole } from "../../types";
-import { roleDataApi, type PatientBundle } from "../../api/roleData";
+import { appointmentApi, type AppointmentRecord, type AppointmentStatus, type AvailabilityRow, type PhysicianOption, type UnavailablePeriod } from "../../api/appointmentApi";
 
-const statusTone = {
-  upcoming: "ink",
-  completed: "sage",
-  cancelled: "neutral",
-} as const;
+const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const activeStatuses: AppointmentStatus[] = ["REQUESTED", "CONFIRMED"];
+const tone = (status: AppointmentStatus) => status === "COMPLETED" ? "sage" : status === "REJECTED" || status === "CANCELLED" ? "neutral" : status === "REQUESTED" ? "gold" : "ink";
+const today = () => new Date().toISOString().slice(0, 10);
+
+function AppointmentRow({ appointment, role, onAction }: { appointment: AppointmentRecord; role: UserRole; onAction: (id: number, action: AppointmentStatus) => void }) {
+  return <div className={`appointment-row flex flex-col gap-3 rounded-xl border border-paper-200 p-4 sm:flex-row sm:items-center sm:justify-between ${role === "doctor" ? "doctor-appointment-row" : role === "patient" ? "patient-appointment-row" : ""}`} data-status={appointment.status}>
+    <div className="appointment-row__summary flex items-start gap-3"><span className="appointment-row__icon mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-800">{role === "doctor" ? <Clock3/> : <Calendar/>}</span><div>
+      {role === "doctor" ? <><div className="doctor-appointment-row__identity"><strong>{appointment.time}</strong><span>{appointment.patientName || "Patient"}</span></div><p className="doctor-appointment-row__reason">{appointment.reason || appointment.title}</p><small>{appointment.date}</small></> : <><p className="font-medium text-charcoal-900">{appointment.reason || appointment.title}</p><p className="mt-0.5 text-xs text-charcoal-500">{role !== "patient" && `${appointment.patientName || "Patient"} · `}{appointment.physicianName || appointment.doctor} · {appointment.date} at {appointment.time}</p>{appointment.status === "REQUESTED" && role === "patient" && <p className="mt-1 text-[11px] text-gold-700">Awaiting physician confirmation</p>}</>}
+    </div></div>
+    <div className="appointment-row__actions flex flex-wrap items-center gap-2"><Badge tone={tone(appointment.status)}>{appointment.status}</Badge>
+      {role === "patient" && activeStatuses.includes(appointment.status) && <button onClick={() => onAction(appointment.id, "CANCELLED")} className="rounded-lg border border-brick-600/25 px-2.5 py-1.5 text-[11px] font-semibold text-brick-700">Cancel</button>}
+      {role === "doctor" && appointment.status === "REQUESTED" && <><button onClick={() => onAction(appointment.id, "CONFIRMED")} className="doctor-action is-confirm">Confirm</button><button onClick={() => onAction(appointment.id, "REJECTED")} className="doctor-action is-destructive">Reject</button></>}
+      {role === "doctor" && appointment.status === "CONFIRMED" && <><button onClick={() => onAction(appointment.id, "COMPLETED")} className="doctor-action is-complete">Complete</button><button onClick={() => onAction(appointment.id, "CANCELLED")} className="doctor-action is-destructive">Cancel</button></>}
+    </div>
+  </div>;
+}
+
+function AvailabilityEditor({ rows, onSave }: { rows: AvailabilityRow[]; onSave: (rows: AvailabilityRow[]) => Promise<void> }) {
+  const [draft, setDraft] = useState<AvailabilityRow[]>([]);
+  useEffect(() => setDraft(rows), [rows]);
+  const rowFor = (dayOfWeek: number) => draft.find(row => row.dayOfWeek === dayOfWeek);
+  const toggle = (dayOfWeek: number) => setDraft(current => current.some(row => row.dayOfWeek === dayOfWeek) ? current.filter(row => row.dayOfWeek !== dayOfWeek) : [...current, { dayOfWeek, startTime: "10:00", endTime: "12:00", slotDuration: 30 }]);
+  const update = (dayOfWeek: number, values: Partial<AvailabilityRow>) => setDraft(current => current.map(row => row.dayOfWeek === dayOfWeek ? { ...row, ...values } : row));
+  return <Card className="doctor-availability-card"><CardHeader title="My availability" subtitle="Publish a recurring weekly schedule for patient booking."/><div className="doctor-availability-grid">{days.map((day, dayOfWeek) => { const row = rowFor(dayOfWeek); return <div key={day} className={`doctor-availability-day ${row ? "is-enabled" : ""}`}><label className="doctor-day-toggle"><input type="checkbox" checked={Boolean(row)} onChange={() => toggle(dayOfWeek)}/><span>{day}</span></label>{row ? <div className="doctor-availability-day__controls"><label><span>Start</span><input aria-label={`${day} start time`} type="time" value={row.startTime} onChange={event => update(dayOfWeek, { startTime: event.target.value })}/></label><label><span>End</span><input aria-label={`${day} end time`} type="time" value={row.endTime} onChange={event => update(dayOfWeek, { endTime: event.target.value })}/></label><label><span>Slot</span><select aria-label={`${day} slot duration`} value={row.slotDuration} onChange={event => update(dayOfWeek, { slotDuration: Number(event.target.value) })}>{[15,30,45,60].map(value => <option key={value} value={value}>{value} min</option>)}</select></label></div> : <p>Unavailable</p>}</div>; })}</div><button onClick={() => void onSave(draft)} className="doctor-schedule-action">Save availability</button></Card>;
+}
 
 export function AppointmentsPage({ role }: { role: UserRole }) {
-  const { appointments, cancelAppointment, bookAppointment, patient } =
-    useAppData();
-  const [showForm, setShowForm] = useState(false);
-  const [reason, setReason] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [mode, setMode] = useState<"in_person" | "video">("video");
-  const [patients, setPatients] = useState<PatientBundle[]>([]);
-  const [selectedPatientId, setSelectedPatientId] = useState<number | "">("");
-  const [doctorActionMessage, setDoctorActionMessage] = useState("");
-  const [urgency, setUrgency] = useState("1");
-  const [preferredClinic, setPreferredClinic] = useState("");
-  const [preferredDoctor, setPreferredDoctor] = useState("");
-  const [preferredStart, setPreferredStart] = useState("");
-  const [preferredEnd, setPreferredEnd] = useState("");
-  const [accessibilityRequired, setAccessibilityRequired] = useState(false);
-  const [sensoryPreference, setSensoryPreference] = useState("");
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [optimizerEngine, setOptimizerEngine] = useState("");
-  const [optimizerLoading, setOptimizerLoading] = useState(false);
+  const [appointments, setAppointments] = useState<AppointmentRecord[]>([]), [physicians, setPhysicians] = useState<PhysicianOption[]>([]);
+  const [availability, setAvailability] = useState<AvailabilityRow[]>([]), [periods, setPeriods] = useState<UnavailablePeriod[]>([]);
+  const [physicianId, setPhysicianId] = useState<number | "">(""), [date, setDate] = useState(""), [time, setTime] = useState(""), [reason, setReason] = useState("");
+  const [slots, setSlots] = useState<string[]>([]), [slotMessage, setSlotMessage] = useState(""), [slotLoading, setSlotLoading] = useState(false);
+  const [physicianError, setPhysicianError] = useState(""), [message, setMessage] = useState(""), [loading, setLoading] = useState(true);
+  const [leave, setLeave] = useState({ startDate: "", endDate: "", reason: "" });
+  const load = async () => { setLoading(true); setPhysicianError(""); try { const result = await appointmentApi.list(); setAppointments(result.appointments); } catch (error) { setMessage(role === "patient" ? "Unable to load your appointments. Please try again." : error instanceof Error ? error.message : "Unable to load appointments."); } if (role === "patient") { try { setPhysicians((await appointmentApi.physicians()).physicians); } catch { setPhysicians([]); setPhysicianError("Unable to load registered physicians. Please try again."); } } if (role === "doctor") { try { const [a,p] = await Promise.all([appointmentApi.getAvailability(), appointmentApi.getPeriods()]); setAvailability(a.availability); setPeriods(p.periods); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to load scheduling settings."); } } setLoading(false); };
+  useEffect(() => { void load(); }, [role]);
+  useEffect(() => { let current = true; setTime(""); setSlots([]); setSlotMessage(""); setSlotLoading(false); if (role !== "patient" || !physicianId || !date) return () => { current = false; }; setSlotLoading(true); appointmentApi.slots(Number(physicianId), date).then(result => { if (!current) return; setSlots(result.slots); setSlotMessage(result.message || (result.slots.length ? "" : "No available times for this date.")); }).catch(() => { if (current) setSlotMessage("Unable to load available times. Please try again."); }).finally(() => { if (current) setSlotLoading(false); }); return () => { current = false; }; }, [role, physicianId, date]);
+  const upcoming = useMemo(() => appointments.filter(a => activeStatuses.includes(a.status) && a.date >= today()), [appointments]);
+  const history = useMemo(() => appointments.filter(a => !activeStatuses.includes(a.status) || a.date < today()), [appointments]);
+  const todays = role === "doctor" ? upcoming.filter(a => a.date === today()) : [];
+  const future = role === "doctor" ? upcoming.filter(a => a.date > today()) : upcoming;
+  const action = async (id: number, status: AppointmentStatus) => { try { if (role === "patient") await appointmentApi.cancel(id); else await appointmentApi.updateStatus(id, status as "CONFIRMED"|"COMPLETED"|"REJECTED"|"CANCELLED"); setMessage(`Appointment ${status.toLowerCase()}.`); await load(); } catch (error) { setMessage(role === "patient" ? "Unable to cancel this appointment. Please try again." : error instanceof Error ? error.message : "Unable to update appointment."); } };
+  const submit = async () => { if (!physicianId || !date || !time || !slots.includes(time) || !reason.trim()) return setMessage("Select a physician, date, available time and enter a reason."); try { await appointmentApi.request({ physicianId: Number(physicianId), date, time, reason: reason.trim() }); setReason(""); setTime(""); setMessage("Appointment requested. Awaiting physician confirmation."); await load(); } catch { setMessage("Unable to request this appointment. The selected time may no longer be available; refresh the available times and try again."); } };
+  const saveAvailability = async (rows: AvailabilityRow[]) => { try { const result = await appointmentApi.saveAvailability(rows); setAvailability(result.availability); setMessage("Availability saved."); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to save availability."); } };
+  const addLeave = async () => { try { await appointmentApi.addPeriod(leave); setLeave({ startDate:"", endDate:"", reason:"" }); setPeriods((await appointmentApi.getPeriods()).periods); setMessage("Unavailable period added."); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to add unavailable period."); } };
+  const removeLeave = async (id: number) => { try { await appointmentApi.removePeriod(id); setPeriods(current => current.filter(period => period.id !== id)); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to remove unavailable period."); } };
+  const pageClass = role === "patient" ? "patient-workspace-page patient-appointments" : role === "doctor" ? "doctor-shared-page doctor-appointments" : "caregiver-shared-page caregiver-appointments";
+  const list = (items: AppointmentRecord[], empty: string, quiet = false) => <div className={`appointment-list ${quiet ? "is-quiet" : ""}`}>{items.map(item => <AppointmentRow key={item.id} appointment={item} role={role} onAction={action}/>)}{!items.length && (role === "doctor" ? <div className="doctor-appointments-empty"><span>{quiet ? <CalendarCheck2/> : <Calendar/>}</span><p>{empty}</p></div> : role === "patient" ? <div className="patient-appointments-empty"><CalendarCheck2/><p>{empty}</p></div> : <p className="text-sm text-charcoal-500">{empty}</p>)}</div>;
 
-  useEffect(() => {
-    if (role !== "caregiver") return;
-    roleDataApi.getPatients("caregiver").then(data => {
-      setPatients(data.patients);
-      if (data.patients[0]) setSelectedPatientId(data.patients[0].patient.id);
-    }).catch(() => setPatients([]));
-  }, [role]);
-
-  const canBook = role === "patient" || role === "caregiver";
-  const canCancel = role !== "doctor";
-  const patientName = typeof patient.name === "string" ? patient.name.trim() : "";
-  const hasNamedPatientContext = patientName.length > 0 && patientName.toLowerCase() !== "patient";
-
-  const submit = () => {
-    if (!reason.trim() || !date.trim() || !time.trim()) return;
-    if (role === "caregiver" && !selectedPatientId) return;
-    bookAppointment({
-      withName: patient.physician.split(",")[0] || "Assigned physician",
-      reason: reason.trim(),
-      date: date.trim(),
-      time: time.trim(),
-      mode,
-      ...(role === "caregiver" ? { patientId: Number(selectedPatientId) } : {}),
-    });
-    setReason("");
-    setDate("");
-    setTime("");
-    setShowForm(false);
-  };
-
-  const upcoming = appointments.filter((a) => a.status === "upcoming");
-  const updateDoctorStatus = async (id:string, status:"Confirmed"|"Completed"|"Cancelled") => {
-    try {
-      await roleDataApi.updateAppointmentStatus(id, status);
-      setDoctorActionMessage(`Appointment marked ${status.toLowerCase()}.`);
-      window.location.reload();
-    } catch (e) {
-      setDoctorActionMessage(e instanceof Error ? e.message : "Unable to update appointment.");
-    }
-  };
-  const past = appointments.filter((a) => a.status !== "upcoming");
-
-  return (
-    <div className={`${role === "patient" ? "patient-workspace-page patient-appointments" : role === "doctor" ? "doctor-shared-page doctor-appointments" : "caregiver-shared-page caregiver-appointments"} space-y-6`}>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-xl font-semibold text-charcoal-900 sm:text-2xl">
-            Appointments
-          </h1>
-          <p className="mt-1 text-sm text-charcoal-500">
-            {role === "doctor"
-              ? hasNamedPatientContext
-                ? `Scheduled visits and follow-ups for ${patientName}.`
-                : "Manage scheduled visits and follow-ups across your connected patients."
-              : "Visits, follow-ups, and lab work — synced with your physician's calendar."}
-          </p>
-        </div>
-        {canBook && (
-          <button
-            onClick={() => setShowForm((s) => !s)}
-            className="flex items-center gap-2 rounded-lg bg-ink-800 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-ink-900"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Request appointment
-          </button>
-        )}
-      </div>
-
-      {showForm && (
-        <Card>
-          <CardHeader title="Request a new appointment" />
-          <div className="grid gap-3 sm:grid-cols-2">
-            {role === "caregiver" && <select value={selectedPatientId} onChange={e=>setSelectedPatientId(e.target.value?Number(e.target.value):"")} className="rounded-lg border border-paper-300 bg-paper-0 px-3.5 py-2.5 text-sm text-charcoal-900 sm:col-span-2"><option value="">Select patient</option>{patients.map(p=><option key={p.patient.id} value={p.patient.id}>{p.patient.name} ({p.patient.patientCode})</option>)}</select>}
-            <input
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Reason for visit"
-              className="rounded-lg border border-paper-300 bg-paper-0 px-3.5 py-2.5 text-sm text-charcoal-900 placeholder:text-charcoal-500/70 focus:border-ink-600 focus:outline-none sm:col-span-2"
-            />
-            <input
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              placeholder="Preferred date (e.g. Fri, Jun 20)"
-              className="rounded-lg border border-paper-300 bg-paper-0 px-3.5 py-2.5 text-sm text-charcoal-900 placeholder:text-charcoal-500/70 focus:border-ink-600 focus:outline-none"
-            />
-            <input
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              placeholder="Preferred time (e.g. 11:00 AM)"
-              className="rounded-lg border border-paper-300 bg-paper-0 px-3.5 py-2.5 text-sm text-charcoal-900 placeholder:text-charcoal-500/70 focus:border-ink-600 focus:outline-none"
-            />
-            <div className="flex gap-2 sm:col-span-2">
-              <button
-                onClick={() => setMode("video")}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
-                  mode === "video"
-                    ? "border-ink-700 bg-ink-100 text-ink-800"
-                    : "border-paper-300 text-charcoal-600"
-                }`}
-              >
-                <Video className="h-3.5 w-3.5" />
-                Video visit
-              </button>
-              <button
-                onClick={() => setMode("in_person")}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
-                  mode === "in_person"
-                    ? "border-ink-700 bg-ink-100 text-ink-800"
-                    : "border-paper-300 text-charcoal-600"
-                }`}
-              >
-                <MapPin className="h-3.5 w-3.5" />
-                In person
-              </button>
-            </div>
-          </div>
-          <div className="mt-4 flex justify-end gap-2">
-            <button
-              onClick={() => setShowForm(false)}
-              className="rounded-lg px-3.5 py-2 text-xs font-semibold text-charcoal-600 hover:bg-paper-100"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={submit}
-              className="rounded-lg bg-ink-800 px-3.5 py-2 text-xs font-semibold text-white hover:bg-ink-900"
-            >
-              Send request
-            </button>
-          </div>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader title="Smart appointment scheduling" subtitle="Find conflict-free slots using urgency, preferences and accessibility constraints." />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <select value={urgency} onChange={e=>setUrgency(e.target.value)} className="rounded-lg border border-paper-300 bg-paper-0 px-3 py-2 text-sm"><option value="1">Low urgency</option><option value="2">Medium urgency</option><option value="3">High urgency</option></select>
-          <input value={preferredClinic} onChange={e=>setPreferredClinic(e.target.value)} placeholder="Preferred clinic (optional)" className="rounded-lg border border-paper-300 px-3 py-2 text-sm" />
-          <input value={preferredDoctor} onChange={e=>setPreferredDoctor(e.target.value)} placeholder="Preferred doctor (optional)" className="rounded-lg border border-paper-300 px-3 py-2 text-sm" />
-          <select value={sensoryPreference} onChange={e=>setSensoryPreference(e.target.value)} className="rounded-lg border border-paper-300 bg-paper-0 px-3 py-2 text-sm"><option value="">No sensory preference</option><option value="light">Low-light preference</option><option value="noise">Low-noise preference</option></select>
-          <input type="time" value={preferredStart} onChange={e=>setPreferredStart(e.target.value)} className="rounded-lg border border-paper-300 px-3 py-2 text-sm" />
-          <input type="time" value={preferredEnd} onChange={e=>setPreferredEnd(e.target.value)} className="rounded-lg border border-paper-300 px-3 py-2 text-sm" />
-          <label className="flex items-center gap-2 rounded-lg border border-paper-300 px-3 py-2 text-xs font-medium"><input type="checkbox" checked={accessibilityRequired} onChange={e=>setAccessibilityRequired(e.target.checked)} /> Accessible clinic required</label>
-          <button disabled={optimizerLoading} onClick={async()=>{setOptimizerLoading(true);try{const r=await roleDataApi.optimizeAppointments({date:date||new Date().toISOString().slice(0,10),mode,urgency:Number(urgency),preferredClinic,preferredDoctor,preferredStart,preferredEnd,accessibilityRequired,sensoryPreference});setSuggestions(r.suggestions);setOptimizerEngine(r.engine);}catch(e){setDoctorActionMessage(e instanceof Error?e.message:"Unable to optimize slots.");}finally{setOptimizerLoading(false);}}} className="rounded-lg bg-ink-800 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{optimizerLoading?"Finding slots…":"Find optimized slots"}</button>
-        </div>
-        {suggestions.length>0 && <div className="mt-4 space-y-2"><div className="text-[11px] font-semibold uppercase tracking-wide text-charcoal-500">Suggested slots · {optimizerEngine}</div>{suggestions.map((x:any,i:number)=><div key={i} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-paper-200 px-3 py-2.5"><div><p className="text-sm font-medium text-charcoal-900">{x.date} at {x.time}</p><p className="text-xs text-charcoal-500">{x.clinic} · {x.doctor} · {x.mode === "video" ? "Telemedicine" : "In person"}{x.distanceKm!=null?` · ${x.distanceKm} km`:""}</p></div><button onClick={()=>{setDate(x.date);setTime(x.time);setReason(reason||"Medical consultation");setDoctorActionMessage(`Selected ${x.date} at ${x.time}.`);}} className="rounded-lg border border-ink-700/30 bg-ink-100 px-3 py-1.5 text-[11px] font-semibold text-ink-800">Use slot</button></div>)}</div>}
-      </Card>
-
-      {doctorActionMessage && <div className="rounded-xl border border-ink-700/30 bg-ink-100 px-4 py-3 text-xs text-ink-800">{doctorActionMessage}</div>}
-
-      <Card>
-        <CardHeader
-          title="Upcoming"
-          subtitle={`${upcoming.length} scheduled`}
-        />
-        <div className="space-y-3">
-          {upcoming.length === 0 && (role === "caregiver" ? <div className="caregiver-appointments-empty"><span><Calendar /></span><div><p>No upcoming care scheduled</p><small>New appointments and follow-ups will appear here.</small></div></div> : <p className="text-sm text-charcoal-500">No upcoming appointments.</p>)}
-          {upcoming.map((a) => (
-            <div
-              key={a.id}
-              className="flex flex-col gap-3 rounded-xl border border-paper-200 p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="flex items-start gap-3">
-                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-800">
-                  {a.mode === "video" ? (
-                    <Video className="h-4.5 w-4.5" />
-                  ) : (
-                    <Calendar className="h-4.5 w-4.5" />
-                  )}
-                </span>
-                <div>
-                  <p className="font-medium text-charcoal-900">{a.reason}</p>
-                  <p className="text-xs text-charcoal-500">
-                    {role === "doctor" ? patient.name : a.withName} &middot;{" "}
-                    {a.date} at {a.time}
-                    {a.location ? ` · ${a.location}` : ""}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 sm:shrink-0">
-                <Badge tone={statusTone[a.status]}>
-                  {a.mode === "video" ? "Video" : "In person"}
-                </Badge>
-                {role === "doctor" ? (
-                  <>
-                    <button onClick={() => void updateDoctorStatus(a.id, "Confirmed")} className="rounded-lg border border-sage-600/30 bg-sage-100 px-2.5 py-1.5 text-[11px] font-semibold text-sage-700">Confirm</button>
-                    <button onClick={() => void updateDoctorStatus(a.id, "Completed")} className="rounded-lg border border-ink-700/30 bg-ink-100 px-2.5 py-1.5 text-[11px] font-semibold text-ink-800">Complete</button>
-                  </>
-                ) : canCancel && (
-                  <button
-                    onClick={() => cancelAppointment(a.id)}
-                    aria-label="Cancel appointment"
-                    className="rounded-lg p-1.5 text-charcoal-500 hover:bg-brick-100 hover:text-brick-700"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {past.length > 0 && (
-        <Card>
-          <CardHeader title="Past & cancelled" />
-          <div className="space-y-2.5">
-            {past.map((a) => (
-              <div
-                key={a.id}
-                className="flex items-center justify-between rounded-lg border border-paper-200 px-3.5 py-2.5"
-              >
-                <div>
-                  <p className="text-sm font-medium text-charcoal-900">
-                    {a.reason}
-                  </p>
-                  <p className="text-xs text-charcoal-500">
-                    {a.date} at {a.time}
-                  </p>
-                </div>
-                <Badge tone={statusTone[a.status]}>{a.status}</Badge>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-    </div>
-  );
+  return <div className={`${pageClass} space-y-6`}><div><h1 className="font-display text-xl font-semibold text-charcoal-900 sm:text-2xl">Appointments</h1><p className="mt-1 text-sm text-charcoal-500">{role === "patient" ? "Request visits from registered HealthSync physicians." : role === "doctor" ? "Manage requests, upcoming care and your published schedule." : "Read-only schedules for patients connected through your Care Network."}</p></div>
+    {message && <div className="rounded-xl border border-ink-700/30 bg-ink-100 px-4 py-3 text-xs text-ink-800">{message}</div>}{loading && <Card><p className="text-sm text-charcoal-500">Loading appointments…</p></Card>}
+    {role === "patient" && <Card className="patient-booking-card"><CardHeader title="Book an appointment" subtitle="Choose a registered physician, date and available time before submitting your request."/><div className="patient-booking-grid"><label><span>Physician</span><select value={physicianId} onChange={e => setPhysicianId(e.target.value ? Number(e.target.value) : "")}><option value="">Select registered physician</option>{physicians.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label><span>Date</span><input type="date" min={today()} value={date} onChange={e => setDate(e.target.value)}/></label></div>{physicianError ? <p className="patient-booking-feedback is-error">{physicianError}</p> : !physicians.length && !loading ? <p className="patient-booking-feedback">No registered physicians available.</p> : null}<div className="patient-slot-section"><span>Available time</span><div className="patient-slot-content">{!physicianId || !date ? <p>Select a physician and date to view available times.</p> : slotLoading ? <p className="is-loading">Loading available times…</p> : slots.length ? <div className="patient-slot-list">{slots.map(slot => <button type="button" key={slot} aria-pressed={time === slot} onClick={() => setTime(slot)} className={time === slot ? "is-selected" : ""}>{slot}</button>)}</div> : <p>{slotMessage || "No available times for this date."}</p>}</div></div><label className="patient-booking-reason"><span>Reason for visit</span><textarea value={reason} onChange={e => setReason(e.target.value)} placeholder="Briefly describe the reason for your visit" rows={2}/></label><button disabled={!physicianId || !date || !time || !slots.includes(time) || !reason.trim()} onClick={() => void submit()} className="patient-booking-submit"><Plus/>Request appointment</button></Card>}
+    {role === "doctor" && <><Card className="doctor-today-card"><CardHeader title="Today's appointments" subtitle={`${todays.filter(a=>a.status==="REQUESTED").length} requested · ${todays.filter(a=>a.status==="CONFIRMED").length} confirmed`}/>{list(todays, "No appointments scheduled for today.")}</Card><div className="doctor-schedule-grid"><AvailabilityEditor rows={availability} onSave={saveAvailability}/><Card className="doctor-leave-card"><CardHeader title="Unavailable / leave" subtitle="Block a temporary date range from patient booking."/><div className="doctor-leave-form"><label><span>From</span><input type="date" value={leave.startDate} onChange={e=>setLeave({...leave,startDate:e.target.value})}/></label><label><span>To</span><input type="date" value={leave.endDate} onChange={e=>setLeave({...leave,endDate:e.target.value})}/></label><label><span>Reason</span><input value={leave.reason} onChange={e=>setLeave({...leave,reason:e.target.value})} placeholder="Optional"/></label><button onClick={() => void addLeave()}><CalendarOff/>Add period</button></div><div className="doctor-leave-list">{periods.map(period=><div key={period.id}><span><strong>{period.startDate} – {period.endDate}</strong>{period.reason && <small>{period.reason}</small>}</span><button aria-label="Remove unavailable period" onClick={()=>void removeLeave(period.id)}><Trash2/>Remove</button></div>)}{!periods.length&&<p>No unavailable periods recorded.</p>}</div></Card></div></>}
+    {role === "doctor" && <Card className="doctor-upcoming-card"><CardHeader title="Upcoming appointments" subtitle={`${future.length} scheduled`}/>{list(future,"No upcoming appointments.")}</Card>}
+    {role !== "doctor" && <Card><CardHeader title="Upcoming appointments" subtitle={`${future.length} scheduled`}/>{list(future, role === "caregiver" ? "No upcoming care scheduled for connected patients." : "No upcoming appointments.")}</Card>}
+    <Card className={role === "doctor" ? "doctor-history-card" : ""}><CardHeader title="Appointment history"/>{list(history, role === "doctor" ? "No appointment history yet." : "No appointment history.", role === "doctor")}</Card>
+  </div>;
 }
