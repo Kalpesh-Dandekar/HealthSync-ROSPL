@@ -66,10 +66,10 @@ export function CareNetworkPage({ authorName: _authorName, authorRole }: { autho
   const selected = connections.find((connection) => connection.patient?.id === selectedPatientId)?.patient;
   const selectedName = typeof selected?.name === "string" ? selected.name.trim() : "";
   const patientName = typeof patient.name === "string" ? patient.name.trim() : "";
-  const displayName = authorRole === "doctor" ? selectedName : selectedName || patientName || "Patient";
-  const hasValidNoteContext = authorRole !== "doctor" || Boolean(selectedPatientId && selectedName);
+  const displayName = authorRole === "patient" ? patientName || "Patient" : selectedName;
+  const hasValidNoteContext = authorRole === "patient" || Boolean(selectedPatientId && selectedName);
   const noteActionDisabled = (authorRole !== "patient" && !selectedPatientId) || !hasValidNoteContext;
-  const patientClass = authorRole === "patient" ? "patient-workspace-page patient-care-network" : authorRole === "doctor" ? "doctor-shared-page doctor-care-network" : "";
+  const patientClass = authorRole === "patient" ? "patient-workspace-page patient-care-network" : authorRole === "doctor" ? "doctor-shared-page doctor-care-network" : "caregiver-shared-page caregiver-care-network";
 
   return (
     <div className={`${patientClass} space-y-6`}>

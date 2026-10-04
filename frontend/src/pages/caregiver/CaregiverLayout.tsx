@@ -8,6 +8,7 @@ import {
   Users,
 } from "lucide-react";
 import { AppShell, type NavItem } from "../../components/layout/AppShell";
+import "./CaregiverLayout.css";
 
 const navItems: NavItem[] = [
   { to: "/caregiver", label: "Dashboard", icon: LayoutDashboard, end: true },

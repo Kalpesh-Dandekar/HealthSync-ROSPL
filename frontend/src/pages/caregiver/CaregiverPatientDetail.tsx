@@ -17,7 +17,7 @@ export function CaregiverPatientDetail() {
   const addVital=async(e:FormEvent)=>{e.preventDefault();try{await roleDataApi.addPatientVital(id!,vitals);setVitals({heartRate:"",systolic:"",diastolic:"",glucose:""});setMessage("Vital reading added to the patient's record.");await load();}catch(e){setMessage(e instanceof Error?e.message:"Unable to save vital reading.");}};
   if(!bundle)return <div className="space-y-4"><button onClick={()=>nav("/caregiver/patients")} className="flex items-center gap-1.5 text-xs font-medium text-charcoal-500"><ArrowLeft className="h-3.5 w-3.5"/>Back to patients</button><Card><p className="text-sm text-charcoal-500">{message||"Loading patient record…"}</p></Card></div>;
   const p=bundle.patient;
-  return <div className="space-y-6">
+  return <div className="caregiver-patient-detail space-y-6">
     <button onClick={()=>nav("/caregiver/patients")} className="flex items-center gap-1.5 text-xs font-medium text-charcoal-500 hover:text-ink-800"><ArrowLeft className="h-3.5 w-3.5"/>Back to patients</button>
     <div><h1 className="font-display text-xl font-semibold text-charcoal-900 sm:text-2xl">{p.name}</h1><p className="mt-1 text-sm text-charcoal-500">{p.patientCode} · Connected patient</p></div>
     {message&&<div className="rounded-xl border border-ink-700/30 bg-ink-100 px-4 py-3 text-xs text-ink-800">{message}</div>}

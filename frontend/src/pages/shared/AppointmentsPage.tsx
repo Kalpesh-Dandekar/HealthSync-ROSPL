@@ -77,7 +77,7 @@ export function AppointmentsPage({ role }: { role: UserRole }) {
   const past = appointments.filter((a) => a.status !== "upcoming");
 
   return (
-    <div className={`${role === "patient" ? "patient-workspace-page patient-appointments" : role === "doctor" ? "doctor-shared-page doctor-appointments" : ""} space-y-6`}>
+    <div className={`${role === "patient" ? "patient-workspace-page patient-appointments" : role === "doctor" ? "doctor-shared-page doctor-appointments" : "caregiver-shared-page caregiver-appointments"} space-y-6`}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-xl font-semibold text-charcoal-900 sm:text-2xl">
@@ -190,11 +190,7 @@ export function AppointmentsPage({ role }: { role: UserRole }) {
           subtitle={`${upcoming.length} scheduled`}
         />
         <div className="space-y-3">
-          {upcoming.length === 0 && (
-            <p className="text-sm text-charcoal-500">
-              No upcoming appointments.
-            </p>
-          )}
+          {upcoming.length === 0 && (role === "caregiver" ? <div className="caregiver-appointments-empty"><span><Calendar /></span><div><p>No upcoming care scheduled</p><small>New appointments and follow-ups will appear here.</small></div></div> : <p className="text-sm text-charcoal-500">No upcoming appointments.</p>)}
           {upcoming.map((a) => (
             <div
               key={a.id}

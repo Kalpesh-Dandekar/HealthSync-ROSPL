@@ -1,0 +1,197 @@
+.app-shell--caregiver {
+  --caregiver-navy: #10252d;
+  --caregiver-aqua: #288f8a;
+  --caregiver-mint: #4caf8c;
+  --caregiver-ink: #19363a;
+  --caregiver-muted: #687d7f;
+  --caregiver-line: #d4e3e1;
+  color: var(--caregiver-ink);
+  background: #e5eeec;
+}
+.app-shell--caregiver .app-shell__sidebar { border-color: rgba(126,174,171,.13); color: #eaf4f2; background: radial-gradient(circle at 10% 0%,rgba(45,151,137,.13),transparent 30%),linear-gradient(180deg,#0c2027,#08171d); box-shadow: 12px 0 42px rgba(20,55,57,.1); }
+.app-shell--caregiver .app-shell__brand,.app-shell--caregiver .app-shell__profile { border-color: rgba(126,174,171,.12); }
+.app-shell--caregiver .app-shell__brand button>span:first-child { background: linear-gradient(145deg,#299a83,#197062); box-shadow: 0 10px 24px rgba(18,116,98,.24),inset 0 1px rgba(255,255,255,.14); }
+.app-shell--caregiver .app-shell__brand .text-charcoal-500,.app-shell--caregiver .app-shell__nav>p { color: #728b8d; }
+.app-shell--caregiver .app-shell__workspace { border-color: rgba(112,176,167,.15); background: linear-gradient(145deg,rgba(24,57,59,.84),rgba(13,38,43,.9)); }
+.app-shell--caregiver .app-shell__workspace .text-charcoal-500 { color: #839b9b; }
+.app-shell--caregiver .app-shell__workspace .text-sage-600 { color: #79d4b5; }
+.app-shell--caregiver .app-shell__workspace .bg-sage-600 { background: #5bc59f; }
+.app-shell--caregiver .app-shell__nav { scrollbar-width: none; }
+.app-shell--caregiver .app-shell__nav::-webkit-scrollbar { width: 0; height: 0; }
+.app-shell--caregiver .app-shell__nav-link { color: #9aadae; }
+.app-shell--caregiver .app-shell__nav-link:not(.is-active):hover { color: #e7f1ef; background: rgba(126,178,172,.07); }
+.app-shell--caregiver .app-shell__nav-link:not(.is-active)>span:first-child { color: #839b9b; background: rgba(126,178,172,.07); }
+.app-shell--caregiver .app-shell__nav-link.is-active { color: #e2f7f1; border-color: rgba(92,200,174,.2); background: linear-gradient(100deg,rgba(43,143,128,.27),rgba(27,87,88,.16)); box-shadow: inset 3px 0 #62cdb1,0 8px 24px rgba(0,0,0,.1); }
+.app-shell--caregiver .app-shell__nav-link.is-active>span:first-child { color: #def9f0; background: rgba(51,166,143,.22); box-shadow: inset 0 0 0 1px rgba(112,220,191,.15); }
+.app-shell--caregiver .app-shell__nav-link.is-active>span:last-child { background: #6ed6ba; }
+.app-shell--caregiver .app-shell__profile>div { color: #e8f2ef; background: rgba(126,174,171,.06); }
+.app-shell--caregiver .app-shell__profile>div .bg-ink-100 { color: #7ad7bb; background: rgba(48,151,130,.2); }
+.app-shell--caregiver .app-shell__profile .text-charcoal-500,.app-shell--caregiver .app-shell__profile>button { color: #829798; }
+.app-shell--caregiver .app-shell__profile>button:hover { color: #dceae6; background: rgba(126,174,171,.07); }
+.app-shell--caregiver .app-shell__workspace-canvas { position: relative; isolation: isolate; background: radial-gradient(ellipse 46rem 25rem at 80% 0%,rgba(49,151,132,.065),transparent 68%),linear-gradient(135deg,#e9f0ef,#dfeae8 58%,#e6eeed); }
+.app-shell--caregiver .app-shell__workspace-canvas .cv-grid { opacity: .44; background-image: linear-gradient(rgba(41,92,88,.024) 1px,transparent 1px),linear-gradient(90deg,rgba(41,92,88,.024) 1px,transparent 1px); background-size: 38px 38px; }
+.app-shell--caregiver .app-shell__mobile-header { color:#edf6f3; border-color:rgba(126,174,171,.14); background:rgba(8,27,32,.96); }
+.app-shell--caregiver .app-shell__mobile-header .text-charcoal-500 { color:#849b9b; }
+
+.app-shell--caregiver .app-shell__main { color:#1b373a; }
+.app-shell--caregiver .app-shell__main .font-display { font-family:var(--font-body); letter-spacing:-.025em; }
+.app-shell--caregiver .app-shell__main .text-charcoal-900,.app-shell--caregiver .app-shell__main .text-charcoal-800 { color:#19363a; }
+.app-shell--caregiver .app-shell__main .text-charcoal-700,.app-shell--caregiver .app-shell__main .text-charcoal-600 { color:#4e6769; }
+.app-shell--caregiver .app-shell__main .text-charcoal-500 { color:#687e7f; }
+.app-shell--caregiver .app-shell__main .text-ink-500,.app-shell--caregiver .app-shell__main .text-ink-600,.app-shell--caregiver .app-shell__main .text-ink-700,.app-shell--caregiver .app-shell__main .text-ink-800 { color:#237e74; }
+.app-shell--caregiver .app-shell__main .bg-paper-0 { color:#19363a; background-color:#fafcfb; }
+.app-shell--caregiver .app-shell__main .bg-paper-50 { background-color:#eef5f2; }
+.app-shell--caregiver .app-shell__main .bg-paper-100 { background-color:#e6efec; }
+.app-shell--caregiver .app-shell__main .border-paper-200 { border-color:#d4e3df; }
+.app-shell--caregiver .app-shell__main .border-paper-300 { border-color:#c8dad6; }
+.app-shell--caregiver .app-shell__main .bg-ink-100 { background-color:#e1f1eb; }
+.app-shell--caregiver .app-shell__main .bg-ink-800 { background-color:#218474; }
+.app-shell--caregiver .app-shell__main .bg-ink-800:hover { background-color:#176d61; }
+.app-shell--caregiver .app-shell__main .rounded-2xl.border.border-paper-200.bg-paper-0 { border-color:#d1e1dd; background:#fafcfb; box-shadow:0 12px 32px rgba(31,72,67,.06),inset 0 1px rgba(255,255,255,.85); }
+.app-shell--caregiver .app-shell__main input,.app-shell--caregiver .app-shell__main select,.app-shell--caregiver .app-shell__main textarea { color:#1a373a; border-color:#c7dad5; background:#fbfdfc; color-scheme:light; box-shadow:inset 0 1px 2px rgba(31,72,67,.035); }
+.app-shell--caregiver .app-shell__main input::placeholder,.app-shell--caregiver .app-shell__main textarea::placeholder { color:#829491; }
+.app-shell--caregiver .app-shell__main input:focus,.app-shell--caregiver .app-shell__main select:focus,.app-shell--caregiver .app-shell__main textarea:focus { border-color:#44a18e; box-shadow:0 0 0 3px rgba(54,160,137,.09); }
+.app-shell--caregiver .app-shell__main input[type="checkbox"] { accent-color:#218474; }
+
+/* Existing caregiver pages become a coordinated light clinical system. */
+.app-shell--caregiver .app-shell__main>div>.space-y-6>.rounded-2xl { background:#f8fbfa; }
+.app-shell--caregiver .app-shell__main>div>.space-y-6>.rounded-2xl:nth-of-type(2) { background:#eef6f3; }
+.app-shell--caregiver .app-shell__main>div>.space-y-6>.rounded-2xl:nth-of-type(3) { background:#f2f7f8; }
+.app-shell--caregiver .app-shell__main .grid.lg\:grid-cols-3>.rounded-2xl:first-child { background:#edf6f2; }
+.app-shell--caregiver .app-shell__main .grid.lg\:grid-cols-3>.rounded-2xl:last-child { background:#f7faf9; }
+.app-shell--caregiver .app-shell__main .bg-sage-100 { background:#e3f2e9; }
+.app-shell--caregiver .app-shell__main .text-sage-700 { color:#307456; }
+.app-shell--caregiver .app-shell__main .bg-gold-100 { background:#faf0db; }
+.app-shell--caregiver .app-shell__main .text-gold-700 { color:#8c6428; }
+.app-shell--caregiver .app-shell__main .bg-brick-100 { background:#f9e8e6; }
+.app-shell--caregiver .app-shell__main .text-brick-700 { color:#a3473e; }
+
+.caregiver-appointments>.rounded-2xl:nth-of-type(1) { border-color:#cbdfe2!important; background:#edf5f7!important; }
+.caregiver-appointments>.rounded-2xl:nth-of-type(2) { margin-top:1.6rem; background:#f8fbfa!important; }
+.caregiver-appointments .rounded-xl.border.border-paper-200 { background:#f0f6f6; }
+.caregiver-appointments-empty { display:flex; align-items:center; gap:.75rem; max-width:34rem; padding:.85rem; border:1px dashed #c8dcda; border-radius:.8rem; color:#566f70; background:#eff6f5; }
+.caregiver-appointments-empty>span { width:2.25rem; height:2.25rem; display:grid; place-items:center; flex:0 0 auto; border-radius:.65rem; color:#397f82; background:#dcebed; }
+.caregiver-appointments-empty svg { width:1rem; }
+.caregiver-appointments-empty p { color:#294b4d; font-size:.78rem; font-weight:700; }
+.caregiver-appointments-empty small { font-size:.68rem; }
+.caregiver-reports>.space-y-4 { display:grid; gap:.75rem; }
+.caregiver-reports>.space-y-4>div { position:relative; overflow:hidden; padding-left:1.35rem; }
+.caregiver-reports>.space-y-4>div::before { content:""; position:absolute; inset:.8rem auto .8rem 0; width:3px; border-radius:999px; background:#49a98c; }
+.caregiver-reports-empty { min-height:8rem; max-width:42rem; display:flex; align-items:center; gap:.8rem; border-style:dashed!important; background:linear-gradient(135deg,#edf5f3,#f6faf8)!important; }
+.caregiver-reports-empty>span { width:2.5rem; height:2.5rem; display:grid; place-items:center; flex:0 0 auto; border-radius:.75rem; color:#2d8377; background:#ddede8; }
+.caregiver-reports-empty>span svg { width:1.05rem; height:1.05rem; }
+.caregiver-reports-empty>div { max-width:31rem; }
+.app-shell--caregiver .care-network__connections { background:#edf7f5 !important; }
+.app-shell--caregiver .care-network__connect { background:#eaf5ef !important; }
+.app-shell--caregiver .care-network__notes { background:#f7f8f5 !important; }
+.app-shell--caregiver .care-network__icon { color:#287f75; border-color:#cce0da; background:#e0efea; }
+.app-shell--caregiver .care-network__empty { border-color:#c9ddd7; background:#eff7f4; }
+
+/* Caregiver AI: deep supportive intelligence panel with mint context surfaces. */
+.app-shell--caregiver .app-shell__main>div>.space-y-6>.grid>.min-w-0>.rounded-2xl:first-child { color:#eef8f5; border-color:rgba(84,171,157,.24); background:radial-gradient(circle at 90% 0%,rgba(55,161,139,.15),transparent 34%),linear-gradient(145deg,#112f35,#0b2228); }
+.app-shell--caregiver .app-shell__main>div>.space-y-6>.grid>.min-w-0>.rounded-2xl:first-child .bg-paper-50 { background:rgba(14,47,50,.82); }
+.app-shell--caregiver .app-shell__main>div>.space-y-6>.grid>.min-w-0>.rounded-2xl:first-child .bg-paper-100 { color:#dcece7; background:rgba(137,181,174,.13); }
+.app-shell--caregiver .app-shell__main>div>.space-y-6>.grid>.min-w-0>.rounded-2xl:first-child .text-charcoal-500 { color:#91aaa5; }
+.app-shell--caregiver .app-shell__main>div>.space-y-6>.grid>.min-w-0>.rounded-2xl:first-child input { color:#edf7f4; border-color:rgba(135,184,174,.25); background:rgba(5,22,25,.5); color-scheme:dark; }
+.app-shell--caregiver .app-shell__main aside>.rounded-2xl:first-child { background:#edf6f3 !important; }
+.app-shell--caregiver .app-shell__main aside>.rounded-2xl:nth-child(2) { background:#e9f5ef !important; }
+.app-shell--caregiver .app-shell__main .md\:grid-cols-3>div:nth-child(2) { background:#eef7f5 !important; }
+.app-shell--caregiver .app-shell__main .md\:grid-cols-3>div:nth-child(3) { background:#f7f3e9 !important; }
+
+/* Caregiver overview and patient coordination surfaces. */
+.caregiver-eyebrow { margin-bottom:.45rem; color:#298679; font-size:.68rem; font-weight:750; letter-spacing:.14em; text-transform:uppercase; }
+.caregiver-dashboard { display:grid; gap:1.35rem; }
+.caregiver-dashboard__header { display:flex; align-items:flex-end; justify-content:space-between; gap:1rem; }
+.caregiver-dashboard__header>div>p { display:flex; align-items:center; gap:.4rem; color:#298679; font-size:.68rem; font-weight:750; letter-spacing:.12em; text-transform:uppercase; }
+.caregiver-dashboard__header>div>p svg { width:.9rem; }
+.caregiver-dashboard__header h1 { margin-top:.25rem; font-size:clamp(1.45rem,3vw,2.15rem); line-height:1.1; }
+.caregiver-dashboard__header>div>span { display:block; max-width:46rem; margin-top:.55rem; color:#64797b; font-size:.82rem; line-height:1.55; }
+.caregiver-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.8rem; }
+.caregiver-metrics>article { display:flex; align-items:flex-start; gap:.8rem; min-width:0; padding:1rem; border:1px solid #cfe1dc; border-radius:1.05rem; background:#eef7f4; box-shadow:0 12px 28px rgba(31,72,67,.06),inset 0 1px rgba(255,255,255,.8); }
+.caregiver-metrics>article:nth-child(2) { border-color:#eadbbd; background:#faf4e8; }
+.caregiver-metrics>article:nth-child(3) { border-color:#ebd0cb; background:#faefed; }
+.caregiver-metrics>article:nth-child(4) { border-color:#cedfe5; background:#edf4f7; }
+.caregiver-metrics>article>span { width:2.25rem; height:2.25rem; display:grid; place-items:center; flex:0 0 auto; border-radius:.7rem; color:#2f8879; background:#dceee8; }
+.caregiver-metrics>article:nth-child(2)>span { color:#986b2d; background:#f2e5ca; }
+.caregiver-metrics>article:nth-child(3)>span { color:#a44d43; background:#f3deda; }
+.caregiver-metrics>article:nth-child(4)>span { color:#397c8c; background:#dce9ed; }
+.caregiver-metrics svg { width:1rem; }
+.caregiver-metrics p { color:#637779; font-size:.63rem; font-weight:750; letter-spacing:.075em; text-transform:uppercase; }
+.caregiver-metrics strong { display:block; margin-top:.2rem; color:#18383a; font-size:1.55rem; line-height:1; }
+.caregiver-metrics small { display:block; margin-top:.35rem; color:#708384; font-size:.67rem; line-height:1.3; }
+.caregiver-status-message { border:1px solid #bfdcd4; border-radius:.8rem; padding:.75rem 1rem; color:#246f65; background:#e4f2ed; font-size:.75rem; }
+.caregiver-selector { display:grid; grid-template-columns:minmax(14rem,.65fr) minmax(0,1.35fr); gap:1rem; padding:1rem; border:1px solid #cfe0dc; border-radius:1rem; background:#f7faf9; box-shadow:0 9px 24px rgba(31,72,67,.045); }
+.caregiver-selector>div:first-child p { color:#26494a; font-size:.78rem; font-weight:750; }
+.caregiver-selector>div:first-child span { display:block; margin-top:.25rem; color:#708283; font-size:.7rem; }
+.caregiver-selector>div:last-child { display:flex; flex-wrap:wrap; gap:.5rem; }
+.caregiver-selector button { min-width:10.5rem; padding:.55rem .7rem; text-align:left; border:1px solid #d3e1de; border-radius:.7rem; background:#fbfdfc; }
+.caregiver-selector button.is-active { border-color:#83bbaa; background:#e2f1eb; box-shadow:inset 0 0 0 1px rgba(53,141,120,.08); }
+.caregiver-selector button strong,.caregiver-selector button small { display:block; }
+.caregiver-selector button strong { color:#264647; font-size:.72rem; }
+.caregiver-selector button small { margin-top:.15rem; color:#6e8282; font-size:.62rem; }
+.caregiver-empty,.caregiver-inline-empty { border-style:dashed!important; background:#edf6f3!important; }
+.caregiver-empty { max-width:47rem; display:flex; align-items:center; gap:1rem; padding:1.15rem; border:1px dashed #bdd8d1; border-radius:1.05rem; box-shadow:0 10px 26px rgba(31,72,67,.045); }
+.caregiver-empty>span,.caregiver-directory-empty>span,.caregiver-alerts-empty>span { width:2.75rem; height:2.75rem; display:grid; place-items:center; flex:0 0 auto; border-radius:.85rem; color:#2b8478; background:#dcece7; }
+.caregiver-empty svg,.caregiver-directory-empty svg,.caregiver-alerts-empty svg { width:1.15rem; }
+.caregiver-empty__copy { min-width:0; }
+.caregiver-empty__copy>small { color:#2d8578; font-size:.62rem; font-weight:750; letter-spacing:.12em; text-transform:uppercase; }
+.caregiver-empty__copy h2 { margin-top:.15rem; color:#1c4041; font-size:1rem; font-weight:750; }
+.caregiver-empty__copy p { max-width:35rem; margin-top:.25rem; color:#667c7c; font-size:.75rem; line-height:1.5; }
+.caregiver-empty__actions { display:flex; align-items:center; flex-wrap:wrap; gap:.55rem 1rem; margin-top:.75rem; }
+.caregiver-empty__actions a { display:flex; align-items:center; gap:.35rem; color:#2b746c; font-size:.7rem; font-weight:750; }
+.caregiver-empty__actions a.is-primary { padding:.5rem .75rem; border-radius:.6rem; color:white; background:#247f70; box-shadow:0 6px 15px rgba(36,127,112,.16); }
+.caregiver-empty__actions svg { width:.75rem; }
+.caregiver-emergency { border-color:#eccfca!important; background:#fbefed!important; }
+.caregiver-section-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.caregiver-section-heading a { color:#287f74; font-size:.72rem; font-weight:700; }
+.caregiver-inline-empty { padding:1rem; color:#6b7f7e; font-size:.78rem; }
+.caregiver-connect-panel { border-color:#c5ded7!important; background:linear-gradient(135deg,#e9f5f1,#f7fbfa)!important; box-shadow:0 15px 34px rgba(31,72,67,.075)!important; }
+.caregiver-connect-panel__heading { display:flex; align-items:flex-start; gap:.75rem; }
+.caregiver-connect-panel__heading>span { width:2.4rem; height:2.4rem; display:grid; place-items:center; flex:0 0 auto; border-radius:.75rem; color:#2d8377; background:#d7ebe4; }
+.caregiver-connect-panel__heading>span svg { width:1rem; }
+.caregiver-patient-list,.caregiver-alert-list { display:grid; gap:.7rem; }
+.caregiver-patient-row { width:100%; display:grid; grid-template-columns:minmax(13rem,1.3fr) minmax(15rem,1fr) auto; align-items:center; gap:1rem; padding:1rem; text-align:left; border:1px solid #d0e1dd; border-radius:1rem; background:#fafcfb; box-shadow:0 9px 25px rgba(31,72,67,.04); transition:border-color .18s ease,transform .18s ease,box-shadow .18s ease; }
+.caregiver-patient-row:hover { border-color:#8fbeb3; transform:translateY(-1px); box-shadow:0 14px 30px rgba(31,72,67,.075); }
+.caregiver-patient-row__identity { min-width:0; display:flex; align-items:center; gap:.8rem; }
+.caregiver-patient-row__identity>span { width:2.45rem; height:2.45rem; display:grid; place-items:center; flex:0 0 auto; border-radius:.8rem; color:#e9f8f3; background:linear-gradient(145deg,#389b87,#237b70); font-size:.85rem; font-weight:750; }
+.caregiver-patient-row__signals { display:flex; flex-wrap:wrap; gap:.4rem .8rem; color:#687d7e; font-size:.7rem; }
+.caregiver-patient-row__signals span { display:flex; align-items:center; gap:.3rem; }
+.caregiver-patient-row__signals svg { width:.8rem; }
+.caregiver-patient-row__signals .has-alert { color:#aa5b38; }
+.caregiver-patient-row__action { display:flex; align-items:center; gap:.65rem; }
+.caregiver-patient-row__action>svg { width:1rem; color:#76908d; }
+.caregiver-directory-empty,.caregiver-alerts-empty { min-height:0; max-width:42rem; display:flex; align-items:center; gap:.85rem; border-style:dashed!important; background:#edf6f3!important; }
+.caregiver-alerts-empty { max-width:36rem; background:linear-gradient(135deg,#e9f4ef,#f5faf7)!important; }
+.caregiver-patient-detail>.rounded-2xl:nth-of-type(1) { background:#eef7f4!important; }
+.caregiver-patient-detail>.rounded-2xl:nth-of-type(3) { background:#edf4f7!important; }
+.caregiver-patient-detail>.rounded-2xl:nth-of-type(4) { background:#f7f8f3!important; }
+.caregiver-alert { position:relative; overflow:hidden; }
+.caregiver-alert::before { content:""; position:absolute; inset:0 auto 0 0; width:3px; background:#d1a34c; }
+.caregiver-alert.is-read { opacity:.78; }
+.caregiver-alert.is-read::before { background:#75aa98; }
+.caregiver-alert__icon { width:2.35rem; height:2.35rem; display:grid; place-items:center; flex:0 0 auto; border-radius:.75rem; }
+.caregiver-alert__icon svg { width:1rem; }
+.caregiver-alert__icon.is-high { color:#a3473e; background:#f9e8e6; }
+.caregiver-alert__icon.is-medium { color:#8c6428; background:#faf0db; }
+.caregiver-alert__action { margin-top:.75rem; display:flex; align-items:center; gap:.4rem; border:1px solid #c7dad5; border-radius:.55rem; padding:.4rem .7rem; color:#486361; background:#f5faf8; font-size:.68rem; font-weight:700; }
+.caregiver-alert__action svg { width:.8rem; }
+
+@media(max-width:640px){
+  .app-shell--caregiver .app-shell__main { padding-inline:.85rem; }
+  .caregiver-reports>.space-y-4 { display:block; }
+  .caregiver-reports>.space-y-4>div+div { margin-top:.7rem; }
+}
+@media(max-width:900px){
+  .caregiver-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .caregiver-patient-row { grid-template-columns:1fr auto; }
+  .caregiver-patient-row__signals { grid-column:1/-1; grid-row:2; }
+}
+@media(max-width:640px){
+  .caregiver-metrics { grid-template-columns:1fr; }
+  .caregiver-dashboard__header { align-items:flex-start; flex-direction:column; }
+  .caregiver-selector { width:100%; grid-template-columns:1fr; }
+  .caregiver-patient-row { grid-template-columns:minmax(0,1fr) auto; padding:.85rem; }
+  .caregiver-patient-row__action .inline-flex { display:none; }
+  .caregiver-empty,.caregiver-directory-empty,.caregiver-alerts-empty { align-items:flex-start; justify-content:flex-start; padding:1rem; }
+}
+@media(prefers-reduced-motion:reduce){.app-shell--caregiver *,.app-shell--caregiver *::before,.app-shell--caregiver *::after{transition-duration:.01ms!important;}}
