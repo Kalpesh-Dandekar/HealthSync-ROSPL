@@ -10,7 +10,7 @@ export function PatientRecords() {
   const { patient, medicines, vitals, appointments } = useAppData();
   const [clinicalRecords, setClinicalRecords] = useState<ClinicalRecord[]>([]);
   const [clinicalState, setClinicalState] = useState("Loading clinical records…");
-  const latest = vitals[vitals.length - 1];
+  const latest = vitals[0];
 
   useEffect(() => {
     let active = true;

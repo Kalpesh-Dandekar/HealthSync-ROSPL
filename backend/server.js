@@ -145,6 +145,41 @@ function roleName(role) {
   return role === "PHYSICIAN" ? "doctor" : role === "CAREGIVER" ? "caregiver" : "patient";
 }
 
+function vitalView(vital) {
+  return {
+    id: vital.id, userId: vital.userId, heartRate: vital.heartRate,
+    systolic: vital.systolic, diastolic: vital.diastolic, glucose: vital.glucose,
+    recordedAt: vital.recordedAt.toISOString(), source: vital.source || "LEGACY",
+    recordedBy: vital.recordedBy ? { id: vital.recordedBy.id, name: vital.recordedBy.name, role: roleName(vital.recordedBy.role) } : null,
+  };
+}
+
+function validateVitalInput(body = {}) {
+  const fields = { heartRate: [20, 250], systolic: [50, 260], diastolic: [30, 180], glucose: [20, 600] };
+  const values = Object.fromEntries(Object.keys(fields).map(key => [key, body[key] === "" || body[key] == null ? null : Number(body[key])]));
+  if (Object.values(values).every(value => value == null)) return { error: "Enter at least one vital reading." };
+  if (Object.values(values).some(value => value != null && !Number.isFinite(value))) return { error: "Vital readings must be valid numbers." };
+  for (const [key, [minimum, maximum]] of Object.entries(fields)) {
+    if (values[key] != null && (values[key] < minimum || values[key] > maximum)) return { error: `${key} must be between ${minimum} and ${maximum}.` };
+  }
+  if ((values.systolic == null) !== (values.diastolic == null)) return { error: "Systolic and diastolic readings must be entered together." };
+  if (values.systolic != null && values.systolic <= values.diastolic) return { error: "Systolic pressure must be greater than diastolic pressure." };
+  return { values };
+}
+
+const vitalRecorderSelect = { select: { id: true, name: true, role: true } };
+
+async function createVitalReading(patientId, recorder, body) {
+  const checked = validateVitalInput(body);
+  if (checked.error) return checked;
+  const vital = await prisma.vital.create({
+    data: { userId: patientId, recordedById: Number(recorder.id), source: recorder.role, ...checked.values },
+    include: { recordedBy: vitalRecorderSelect },
+  });
+  emitToUser(patientId, "vitals:updated", { patientId, vital: vitalView(vital) });
+  return { vital };
+}
+
 function clinicalRecordView(record) {
   return {
     id: record.id, patientId: record.patientId, physicianId: record.physicianId,
@@ -173,7 +208,7 @@ async function getPatientBundle(patientId) {
   if (!patient || patient.role !== "PATIENT") return null;
   const [medications, vitals, alerts, appointments, connections, clinicalRecords] = await Promise.all([
     prisma.medication.findMany({ where: { userId: patientId }, include: { logs: { orderBy: { scheduledAt: "desc" }, take: 20 } }, orderBy: { createdAt: "desc" } }),
-    prisma.vital.findMany({ where: { userId: patientId }, orderBy: { recordedAt: "desc" }, take: 20 }),
+    prisma.vital.findMany({ where: { userId: patientId }, include: { recordedBy: vitalRecorderSelect }, orderBy: { recordedAt: "desc" }, take: 20 }),
     prisma.alert.findMany({ where: { userId: patientId }, orderBy: { createdAt: "desc" }, take: 30 }),
     prisma.appointment.findMany({ where: { userId: patientId }, orderBy: { id: "desc" } }),
     prisma.careConnection.findMany({ where: { patientId }, include: { caregiver: true, physician: true } }),
@@ -195,7 +230,7 @@ async function getPatientBundle(patientId) {
   const completed = medications.flatMap(m => m.logs).filter(l => l.status !== "PENDING").length;
   return {
     patient: { ...publicUser(patient), patientCode: `#${patient.id}`, age: 0, primaryCaregiver: caregiver?.name || "Not connected", physician: physician?.name || "Not connected" },
-    medications, vitals, alerts, appointments, clinicalRecords: clinicalRecords.map(clinicalRecordView), careTeam,
+    medications, vitals: vitals.map(vitalView), alerts, appointments, clinicalRecords: clinicalRecords.map(clinicalRecordView), careTeam,
     adherenceRate: completed ? Math.round((taken / completed) * 100) : 0,
   };
 }
@@ -400,18 +435,35 @@ app.post("/api/caregiver/patients/:id/vitals", auth, async (req, res) => {
   if (req.user.role !== "CAREGIVER") return res.status(403).json({ message: "Caregiver access required." });
   const patientId = Number(req.params.id);
   if (!(await requireAssigned(req, res, patientId))) return res.status(403).json({ message: "You are not connected to this patient." });
-  const values = {
-    heartRate: req.body?.heartRate === "" || req.body?.heartRate == null ? null : Number(req.body.heartRate),
-    systolic: req.body?.systolic === "" || req.body?.systolic == null ? null : Number(req.body.systolic),
-    diastolic: req.body?.diastolic === "" || req.body?.diastolic == null ? null : Number(req.body.diastolic),
-    glucose: req.body?.glucose === "" || req.body?.glucose == null ? null : Number(req.body.glucose),
-  };
-  if (Object.values(values).every(v => v == null)) return res.status(400).json({ message: "Enter at least one vital reading." });
-  if (Object.values(values).some(v => v != null && !Number.isFinite(v))) return res.status(400).json({ message: "Vital readings must be valid numbers." });
-  const vital = await prisma.vital.create({ data: { userId: patientId, ...values } });
+  const result = await createVitalReading(patientId, req.user, req.body);
+  if (result.error) return res.status(400).json({ message: result.error });
   await prisma.alert.create({ data: { userId: patientId, type: "vitals", message: `New vital reading recorded by caregiver ${req.user.name}.`, severity: "INFO" } });
-  emitToUser(patientId, "vitals:updated", { patientId, vital });
-  res.status(201).json({ vital });
+  res.status(201).json({ vital: vitalView(result.vital) });
+});
+
+app.get("/api/caregiver/patients/:id/vitals", auth, async (req, res) => {
+  if (req.user.role !== "CAREGIVER") return res.status(403).json({ message: "Caregiver access required." });
+  const patientId = Number(req.params.id);
+  if (!(await requireAssigned(req, res, patientId))) return res.status(403).json({ message: "You are not connected to this patient." });
+  const vitals = await prisma.vital.findMany({ where: { userId: patientId }, include: { recordedBy: vitalRecorderSelect }, orderBy: { recordedAt: "desc" }, take: 50 });
+  res.json({ vitals: vitals.map(vitalView) });
+});
+
+app.get("/api/doctor/patients/:id/vitals", auth, async (req, res) => {
+  if (req.user.role !== "PHYSICIAN") return res.status(403).json({ message: "Physician access required." });
+  const patientId = Number(req.params.id);
+  if (!(await requireAssigned(req, res, patientId))) return res.status(403).json({ message: "You are not connected to this patient." });
+  const vitals = await prisma.vital.findMany({ where: { userId: patientId }, include: { recordedBy: vitalRecorderSelect }, orderBy: { recordedAt: "desc" }, take: 50 });
+  res.json({ vitals: vitals.map(vitalView) });
+});
+
+app.post("/api/doctor/patients/:id/vitals", auth, async (req, res) => {
+  if (req.user.role !== "PHYSICIAN") return res.status(403).json({ message: "Physician access required." });
+  const patientId = Number(req.params.id);
+  if (!(await requireAssigned(req, res, patientId))) return res.status(403).json({ message: "You are not connected to this patient." });
+  const result = await createVitalReading(patientId, req.user, req.body);
+  if (result.error) return res.status(400).json({ message: result.error });
+  res.status(201).json({ vital: vitalView(result.vital) });
 });
 
 // ---------------- Clinical updates / caregiver observations ----------------
@@ -1019,12 +1071,14 @@ app.get("/api/care-network", auth, async (req, res) => {
 
 app.get("/api/vitals", auth, async (req, res) => {
   try {
+    if (req.user.role !== "PATIENT") return res.status(403).json({ message: "Patient access required." });
     const vitals = await prisma.vital.findMany({
       where: { userId: Number(req.user.id) },
+      include: { recordedBy: vitalRecorderSelect },
       orderBy: { recordedAt: "desc" },
-      take: 20,
+      take: 50,
     });
-    res.json({ vitals });
+    res.json({ vitals: vitals.map(vitalView) });
   } catch (error) {
     console.error("Get vitals error:", error);
     res.status(500).json({ message: "Unable to load vitals." });
@@ -1033,25 +1087,10 @@ app.get("/api/vitals", auth, async (req, res) => {
 
 app.post("/api/vitals", auth, async (req, res) => {
   try {
-    const { heartRate, systolic, diastolic, glucose } = req.body || {};
-    const values = {
-      heartRate: heartRate === "" || heartRate == null ? null : Number(heartRate),
-      systolic: systolic === "" || systolic == null ? null : Number(systolic),
-      diastolic: diastolic === "" || diastolic == null ? null : Number(diastolic),
-      glucose: glucose === "" || glucose == null ? null : Number(glucose),
-    };
-
-    if (Object.values(values).every((value) => value == null)) {
-      return res.status(400).json({ message: "Enter at least one vital reading." });
-    }
-    if (Object.values(values).some((value) => value != null && !Number.isFinite(value))) {
-      return res.status(400).json({ message: "Vital readings must be valid numbers." });
-    }
-
-    const vital = await prisma.vital.create({
-      data: { userId: Number(req.user.id), ...values },
-    });
-    res.status(201).json({ vital });
+    if (req.user.role !== "PATIENT") return res.status(403).json({ message: "Patient access required." });
+    const result = await createVitalReading(Number(req.user.id), req.user, req.body);
+    if (result.error) return res.status(400).json({ message: result.error });
+    res.status(201).json({ vital: vitalView(result.vital) });
   } catch (error) {
     console.error("Create vital error:", error);
     res.status(500).json({ message: "Unable to save vital reading." });

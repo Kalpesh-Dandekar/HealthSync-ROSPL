@@ -7,7 +7,6 @@ datasource db {
   provider = "postgresql"
 }
 
-
 enum UserRole {
   PATIENT
   CAREGIVER
@@ -48,37 +47,44 @@ enum ClinicalRecordStatus {
   CRITICAL
 }
 
+enum VitalSource {
+  PATIENT
+  PHYSICIAN
+  CAREGIVER
+}
+
 model User {
-  id                   Int              @id @default(autoincrement())
-  name                 String
-  email                String           @unique
-  password             String
-  role                 UserRole         @default(PATIENT)
-  createdAt            DateTime         @default(now())
-  medications          Medication[]
-  medicationLogs       MedicationLog[]
-  vitals               Vital[]
-  patientAppointments  Appointment[]           @relation("PatientAppointments")
-  physicianAppointments Appointment[]           @relation("PhysicianAppointments")
-  physicianAvailability PhysicianAvailability[]
+  id                          Int                          @id @default(autoincrement())
+  name                        String
+  email                       String                       @unique
+  password                    String
+  role                        UserRole                     @default(PATIENT)
+  createdAt                   DateTime                     @default(now())
+  medications                 Medication[]
+  medicationLogs              MedicationLog[]
+  vitals                      Vital[]                      @relation("PatientVitals")
+  recordedVitals              Vital[]                      @relation("RecordedVitals")
+  patientAppointments         Appointment[]                @relation("PatientAppointments")
+  physicianAppointments       Appointment[]                @relation("PhysicianAppointments")
+  physicianAvailability       PhysicianAvailability[]
   physicianUnavailablePeriods PhysicianUnavailablePeriod[]
-  patientClinicalRecords ClinicalRecord[] @relation("PatientClinicalRecords")
-  authoredClinicalRecords ClinicalRecord[] @relation("PhysicianClinicalRecords")
-  alerts               Alert[]
-  patientConnections   CareConnection[] @relation("PatientConnections")
-  caregiverConnections CareConnection[] @relation("CaregiverConnections")
-  physicianConnections CareConnection[] @relation("PhysicianConnections")
+  patientClinicalRecords      ClinicalRecord[]             @relation("PatientClinicalRecords")
+  authoredClinicalRecords     ClinicalRecord[]             @relation("PhysicianClinicalRecords")
+  alerts                      Alert[]
+  patientConnections          CareConnection[]             @relation("PatientConnections")
+  caregiverConnections        CareConnection[]             @relation("CaregiverConnections")
+  physicianConnections        CareConnection[]             @relation("PhysicianConnections")
 }
 
 model Medication {
-  id        Int              @id @default(autoincrement())
+  id        Int             @id @default(autoincrement())
   userId    Int
   name      String
   dosage    String
   schedule  String
-  stock     Int              @default(0)
-  createdAt DateTime         @default(now())
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock     Int             @default(0)
+  createdAt DateTime        @default(now())
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   logs      MedicationLog[]
 }
 
@@ -94,14 +100,20 @@ model MedicationLog {
 }
 
 model Vital {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  heartRate  Int?
-  systolic   Int?
-  diastolic  Int?
-  glucose    Float?
-  recordedAt DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           Int          @id @default(autoincrement())
+  userId       Int
+  recordedById Int?
+  source       VitalSource?
+  heartRate    Int?
+  systolic     Int?
+  diastolic    Int?
+  glucose      Float?
+  recordedAt   DateTime     @default(now())
+  user         User         @relation("PatientVitals", fields: [userId], references: [id], onDelete: Cascade)
+  recordedBy   User?        @relation("RecordedVitals", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, recordedAt])
+  @@index([recordedById])
 }
 
 model Appointment {
@@ -128,13 +140,13 @@ model Appointment {
 }
 
 model PhysicianAvailability {
-  id              Int  @id @default(autoincrement())
-  physicianId     Int
-  dayOfWeek       Int
-  startTime       String
-  endTime         String
-  slotDuration    Int  @default(30)
-  physician       User @relation(fields: [physicianId], references: [id], onDelete: Cascade)
+  id           Int    @id @default(autoincrement())
+  physicianId  Int
+  dayOfWeek    Int
+  startTime    String
+  endTime      String
+  slotDuration Int    @default(30)
+  physician    User   @relation(fields: [physicianId], references: [id], onDelete: Cascade)
 
   @@unique([physicianId, dayOfWeek])
   @@index([physicianId])
@@ -176,14 +188,14 @@ model ClinicalRecord {
 }
 
 model Alert {
-  id         Int           @id @default(autoincrement())
-  userId     Int
-  type       String
-  message    String
-  severity   AlertSeverity @default(INFO)
-  read       Boolean       @default(false)
-  createdAt  DateTime      @default(now())
-  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        Int           @id @default(autoincrement())
+  userId    Int
+  type      String
+  message   String
+  severity  AlertSeverity @default(INFO)
+  read      Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model CareConnection {
