@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MessageSquareText, Send, UserPlus, Users } from "lucide-react";
+import { Check, Copy, Link2, MessageSquareText, Send, UserPlus, Users, X } from "lucide-react";
 import { roleDataApi } from "../../api/roleData";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
@@ -8,118 +8,51 @@ import type { UserRole } from "../../types";
 
 export function CareNetworkPage({ authorName: _authorName, authorRole }: { authorName: string; authorRole: UserRole; }) {
   const { patient } = useAppData();
-  const [connections, setConnections] = useState<any[]>([]);
-  const [selectedPatientId, setSelectedPatientId] = useState<number | "">("");
-  const [notes, setNotes] = useState<any[]>([]);
-  const [draft, setDraft] = useState("");
-  const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
+  const [connections,setConnections]=useState<any[]>([]), [requests,setRequests]=useState<any[]>([]), [notes,setNotes]=useState<any[]>([]);
+  const [selectedPatientId,setSelectedPatientId]=useState<number|"">(""), [draft,setDraft]=useState(""), [entry,setEntry]=useState(""), [message,setMessage]=useState("");
+  const [invite,setInvite]=useState<any|null>(null), [revealedCode,setRevealedCode]=useState(""); const [busy,setBusy]=useState(false);
 
-  const load = async () => {
-    try {
-      const data = await roleDataApi.getCareNetwork();
-      setConnections(data.connections);
-      const first = data.connections[0]?.patient?.id;
-      const id = selectedPatientId || first;
-      if (id) {
-        setSelectedPatientId(id);
-        const noteData = await roleDataApi.getNotes(id);
-        setNotes(noteData.notes);
-      }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to load care network.");
-    }
-  };
+  async function load(){
+    try{
+      const network=await roleDataApi.getCareNetwork(); setConnections(network.connections);
+      if(authorRole!=="caregiver") setRequests((await roleDataApi.getPhysicianRequests()).requests);
+      if(authorRole==="patient") setInvite((await roleDataApi.getCaregiverInvite()).invite);
+      const first=network.connections[0]?.patient?.id; const id=selectedPatientId||first;
+      if(id){setSelectedPatientId(id);setNotes((await roleDataApi.getNotes(id)).notes);} else if(authorRole==="patient") setNotes((await roleDataApi.getNotes()).notes); else setNotes([]);
+    }catch(error){setMessage(error instanceof Error?error.message:"Unable to load care network.");}
+  }
+  useEffect(()=>{void load();},[]);
+  useEffect(()=>{if(selectedPatientId)roleDataApi.getNotes(selectedPatientId).then(data=>setNotes(data.notes)).catch(()=>setNotes([]));},[selectedPatientId]);
+  useEffect(()=>{if(!message||/unable|invalid|cannot|not found|required|already|failed|denied/i.test(message))return;const timer=window.setTimeout(()=>setMessage(""),5000);return()=>window.clearTimeout(timer);},[message]);
 
-  useEffect(() => { void load(); }, []);
-  useEffect(() => {
-    if (selectedPatientId) roleDataApi.getNotes(selectedPatientId).then((data) => setNotes(data.notes)).catch(() => setNotes([]));
-  }, [selectedPatientId]);
+  async function run(action:()=>Promise<any>,fallback:string){setBusy(true);try{const result=await action();setMessage(result.message||fallback);setEntry("");await load();return result;}catch(error){setMessage(error instanceof Error?error.message:fallback);}finally{setBusy(false);}}
+  const connect=async()=>{if(!entry.trim())return;if(authorRole==="caregiver")await run(()=>roleDataApi.redeemCaregiverInvite(entry.trim()),"Unable to connect patient.");else await run(()=>roleDataApi.sendPhysicianRequest(entry.trim()),"Unable to send request.");};
+  const resolve=async(id:number,action:"accept"|"decline")=>{await run(()=>roleDataApi.resolvePhysicianRequest(id,action),`Unable to ${action} request.`);};
+  const generateInvite=async()=>{const result=await run(()=>roleDataApi.generateCaregiverInvite(),"Unable to generate invite code.");if(result?.invite?.code){setRevealedCode(result.invite.code);setInvite(result.invite);}};
+  const disconnect=async(id:number,name:string)=>{if(!window.confirm(`Disconnect ${name}? Future connected-care access will be removed, but patient health records will remain.`))return;await run(()=>roleDataApi.disconnectCareConnection(id),"Unable to disconnect.");};
+  const submit=async()=>{if(!draft.trim()||(authorRole!=="patient"&&!selectedPatientId))return;await run(()=>roleDataApi.addNote(draft.trim(),selectedPatientId||undefined),"Unable to post note.");setDraft("");};
 
-  const connect = async () => {
-    if (!email.trim()) return;
-    try {
-      const response = await roleDataApi.connect(email.trim());
-      setMessage(response.message || "Connection created.");
-      setEmail("");
-      await load();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to connect account.");
-    }
-  };
+  const members=authorRole==="patient"?connections.flatMap(connection=>(connection.members||[]).map((member:any)=>({...member,patient:connection.patient}))):connections.filter(connection=>connection.ownConnectionId).map(connection=>({connectionId:connection.ownConnectionId,patient:connection.patient,role:"patient"}));
+  const selected=connections.find(connection=>connection.patient?.id===selectedPatientId)?.patient;
+  const displayName=authorRole==="patient"?(patient.name||"Patient"):selected?.name||"";
+  const hasNoteContext=authorRole==="patient"||Boolean(selectedPatientId);
+  const pageClass=authorRole==="patient"?"patient-workspace-page patient-care-network":authorRole==="doctor"?"doctor-shared-page doctor-care-network":"caregiver-shared-page caregiver-care-network";
+  const pending=requests.filter(request=>request.status==="PENDING");
 
-  const submit = async () => {
-    if (!draft.trim() || (authorRole !== "patient" && !selectedPatientId)) return;
-    try {
-      await roleDataApi.addNote(draft.trim(), selectedPatientId || undefined);
-      setDraft("");
-      setMessage("Note shared with the care team.");
-      if (selectedPatientId) {
-        const data = await roleDataApi.getNotes(selectedPatientId);
-        setNotes(data.notes);
-      }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to post note.");
-    }
-  };
+  return <div className={`${pageClass} space-y-6`}>
+    <div><h1 className="font-display text-xl font-semibold text-charcoal-900 sm:text-2xl">Care network</h1><p className="mt-1 text-sm text-charcoal-500">Manage trusted care-team access and patient-centered shared updates.</p></div>
+    {message&&<div className="rounded-xl border border-ink-700/30 bg-ink-100 px-4 py-3 text-xs text-ink-800">{message}</div>}
 
-  const selected = connections.find((connection) => connection.patient?.id === selectedPatientId)?.patient;
-  const selectedName = typeof selected?.name === "string" ? selected.name.trim() : "";
-  const patientName = typeof patient.name === "string" ? patient.name.trim() : "";
-  const displayName = authorRole === "patient" ? patientName || "Patient" : selectedName;
-  const hasValidNoteContext = authorRole === "patient" || Boolean(selectedPatientId && selectedName);
-  const noteActionDisabled = (authorRole !== "patient" && !selectedPatientId) || !hasValidNoteContext;
-  const patientClass = authorRole === "patient" ? "patient-workspace-page patient-care-network" : authorRole === "doctor" ? "doctor-shared-page doctor-care-network" : "caregiver-shared-page caregiver-care-network";
+    {authorRole!=="patient"&&connections.length>0&&<Card><CardHeader title="Connected patients"/><div className="flex flex-wrap gap-2">{connections.map(connection=><button key={connection.patient.id} onClick={()=>setSelectedPatientId(connection.patient.id)} className={`rounded-xl border px-3 py-2 text-left ${selectedPatientId===connection.patient.id?"border-ink-700 bg-ink-100":"border-paper-300 bg-paper-0"}`}><p className="text-sm font-semibold text-charcoal-900">{connection.patient.name}</p><p className="text-[11px] text-charcoal-500">{connection.patient.email}</p></button>)}</div></Card>}
 
-  return (
-    <div className={`${patientClass} space-y-6`}>
-      <div>
-        <h1 className="font-display text-xl font-semibold text-charcoal-900 sm:text-2xl">Care network</h1>
-        <p className="mt-1 text-sm text-charcoal-500">Role-based connections and shared care updates stored in PostgreSQL.</p>
-      </div>
+    <Card className="care-network__connections"><CardHeader title={authorRole==="patient"?"My care team":"Current connections"} action={<span className="care-network__icon"><Users/></span>}/><div className="space-y-3">{members.length===0&&<div className="care-network__empty"><Users/><div><p>No active connections yet</p><span>{authorRole==="caregiver"?"An invite code does not grant health-record access until it is successfully redeemed.":"Pending requests and unused invite codes do not grant health-record access."}</span></div></div>}{members.map((member:any)=><div key={member.connectionId} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-paper-200 p-3"><div><p className="text-sm font-semibold text-charcoal-900">{authorRole==="patient"?member.name:member.patient.name}</p><div className="mt-1 flex gap-2"><Badge tone={member.role==="doctor"?"ink":"neutral"}>{authorRole==="patient"?(member.role==="doctor"?"Physician":"Caregiver"):"Patient"}</Badge><Badge tone="sage">Connected</Badge></div></div><button disabled={busy} onClick={()=>void disconnect(member.connectionId,authorRole==="patient"?member.name:member.patient.name)} className="rounded-lg border border-brick-600/30 px-3 py-1.5 text-[11px] font-semibold text-brick-700">Disconnect</button></div>)}</div></Card>
 
-      {authorRole !== "patient" && connections.length > 0 && (
-        <Card>
-          <CardHeader title="Connected patients" />
-          <div className="flex flex-wrap gap-2">
-            {connections.filter((connection) => connection.patient).map((connection) => (
-              <button key={connection.patient.id} onClick={() => setSelectedPatientId(connection.patient.id)} className={`rounded-xl border px-3 py-2 text-left ${selectedPatientId === connection.patient.id ? "border-ink-700 bg-ink-100" : "border-paper-300 bg-paper-0"}`}>
-                <p className="text-sm font-semibold text-charcoal-900">{connection.patient.name}</p>
-                <p className="text-[11px] text-charcoal-500">{connection.patient.email}</p>
-              </button>
-            ))}
-          </div>
-        </Card>
-      )}
+    {authorRole!=="caregiver"&&<Card><CardHeader title="Physician connection requests" subtitle="A pending request grants no patient-record access."/><div className="space-y-2">{pending.length===0&&<p className="text-sm text-charcoal-500">No pending requests.</p>}{pending.map(request=>{const person=authorRole==="patient"?request.physician:request.patient;return <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-paper-200 bg-paper-50 p-3"><div><p className="text-sm font-semibold text-charcoal-900">{person.name}</p><p className="text-[11px] text-charcoal-500">{request.direction==="INCOMING"?"Wants to connect with you":"Request pending"}</p></div>{request.direction==="INCOMING"?<div className="flex gap-2"><button disabled={busy} onClick={()=>void resolve(request.id,"accept")} className="flex items-center gap-1 rounded-lg bg-ink-800 px-3 py-1.5 text-[11px] font-semibold text-white"><Check className="h-3 w-3"/>Accept</button><button disabled={busy} onClick={()=>void resolve(request.id,"decline")} className="flex items-center gap-1 rounded-lg border border-paper-300 px-3 py-1.5 text-[11px] font-semibold"><X className="h-3 w-3"/>Decline</button></div>:<Badge tone="gold">Pending</Badge>}</div>;})}</div></Card>}
 
-      <Card className="care-network__connections">
-        <CardHeader title="Current connections" action={<span className="care-network__icon"><Users /></span>} />
-        <div className="space-y-3">
-          {connections.length === 0 && <div className="care-network__empty"><Users /><div><p>No connections yet</p><span>Connect a trusted care team member when you are ready.</span></div></div>}
-          {connections.map((connection, index) => (
-            <div key={connection.patient?.id || index} className="rounded-xl border border-paper-200 p-3">
-              <div className="flex items-center gap-2"><Users className="h-4 w-4 text-ink-800" /><p className="text-sm font-semibold text-charcoal-900">{connection.patient?.name || "Patient"}</p></div>
-              <div className="mt-2 flex flex-wrap gap-2">{connection.caregiver && <Badge tone="neutral">Caregiver: {connection.caregiver.name}</Badge>}{connection.physician && <Badge tone="ink">Physician: {connection.physician.name}</Badge>}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
+    <Card className="care-network__connect"><CardHeader title={authorRole==="patient"?"Connect a physician":authorRole==="doctor"?"Connect a patient":"Connect a patient"} subtitle={authorRole==="caregiver"?"Use the one-time invite code shared by the patient.":"Send a request using the HealthSync account email."} action={<span className="care-network__icon"><UserPlus/></span>}/><div className="flex flex-col gap-2 sm:flex-row"><input value={entry} onChange={event=>setEntry(authorRole==="caregiver"?event.target.value.toUpperCase():event.target.value)} placeholder={authorRole==="patient"?"Physician account email":authorRole==="doctor"?"Patient account email":"Caregiver invite code"} className="min-w-0 flex-1 rounded-xl border border-paper-300 bg-paper-50 px-3 py-2.5 text-sm outline-none focus:border-ink-700"/><button disabled={busy} onClick={()=>void connect()} className="flex items-center justify-center gap-2 rounded-xl bg-ink-800 px-4 py-2.5 text-xs font-semibold text-white"><Link2 className="h-3.5 w-3.5"/>{authorRole==="caregiver"?"Connect patient":"Send request"}</button></div></Card>
 
-      <Card className="care-network__connect">
-        <CardHeader title="Connect a care team member" subtitle="Use a HealthSync account email to create a role-based connection" action={<span className="care-network__icon"><UserPlus /></span>} />
-        <div className="flex flex-col gap-2 sm:flex-row"><input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Account email" className="min-w-0 flex-1 rounded-xl border border-paper-300 bg-paper-50 px-3 py-2.5 text-sm outline-none focus:border-ink-700" /><button onClick={connect} className="rounded-xl bg-ink-800 px-4 py-2.5 text-xs font-semibold text-white">Connect</button></div>
-        {message && <p className="mt-2 text-xs text-charcoal-500">{message}</p>}
-      </Card>
+    {authorRole==="patient"&&<Card><CardHeader title="Caregiver access" subtitle="Generate one active, one-time code and share it only with a trusted caregiver."/><div className="flex flex-wrap items-center gap-3">{revealedCode?<><code className="rounded-lg border border-paper-300 bg-paper-50 px-4 py-2 text-sm font-bold tracking-wider">{revealedCode}</code><button onClick={()=>void navigator.clipboard.writeText(revealedCode)} className="flex items-center gap-1 rounded-lg border border-paper-300 px-3 py-2 text-xs font-semibold"><Copy className="h-3.5 w-3.5"/>Copy</button></>:invite?<p className="text-sm text-charcoal-600">An unused invite ending in <strong>{invite.codeHint}</strong> exists. Generate a replacement if the original code is unavailable.</p>:<p className="text-sm text-charcoal-500">No active caregiver invite.</p>}<button disabled={busy} onClick={()=>void generateInvite()} className="rounded-lg bg-ink-800 px-4 py-2 text-xs font-semibold text-white">{invite?"Replace invite code":"Generate invite code"}</button></div><p className="mt-2 text-[11px] text-charcoal-500">Generating a replacement immediately invalidates the previous unused code.</p></Card>}
 
-      <Card className="care-network__notes">
-        <CardHeader title={displayName ? `Shared notes · ${displayName}` : "Shared notes"} subtitle={!hasValidNoteContext ? "Select a connected patient to view or share care-team notes." : undefined} action={<span className="care-network__icon"><MessageSquareText /></span>} />
-        <textarea value={draft} onChange={(event) => setDraft(event.target.value)} disabled={!hasValidNoteContext} rows={3} placeholder={hasValidNoteContext ? "Share an observation, question, or update..." : "Select a connected patient to begin"} className="w-full resize-none rounded-xl border border-paper-200 bg-paper-50 p-3 text-sm text-charcoal-900 focus:border-ink-700 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" />
-        <div className="mt-3 flex justify-end"><button onClick={submit} disabled={noteActionDisabled} className="flex items-center gap-2 rounded-lg bg-ink-800 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"><Send className="h-3.5 w-3.5" />Post note</button></div>
-        <div className="mt-5 space-y-3">
-          {notes.length === 0 && <p className="text-sm text-charcoal-500">No notes for this patient yet.</p>}
-          {notes.map((note) => <div key={note.id} className="rounded-xl border border-paper-200 bg-paper-50 p-4"><div className="flex items-center justify-between"><p className="text-sm font-semibold text-charcoal-900">{note.author}</p><span className="text-xs text-charcoal-500">{new Date(note.timestamp).toLocaleString()}</span></div><Badge tone={note.authorRole === "doctor" ? "ink" : "neutral"}>{note.authorRole}</Badge><p className="mt-2 text-sm leading-relaxed text-charcoal-700">{note.note}</p></div>)}
-        </div>
-      </Card>
-    </div>
-  );
+    <Card className="care-network__notes"><CardHeader title={displayName?`Shared notes · ${displayName}`:"Shared notes"} subtitle={!hasNoteContext?"Connect a patient to start sharing care-team notes.":undefined} action={<span className="care-network__icon"><MessageSquareText/></span>}/>{!hasNoteContext?<div className="care-network__empty"><MessageSquareText/><div><p>Connect a patient to start sharing care-team notes.</p><span>The note composer becomes available after an active connection is established.</span></div></div>:<><textarea value={draft} onChange={event=>setDraft(event.target.value)} rows={3} placeholder="Share an observation, question, or update..." className="w-full resize-none rounded-xl border border-paper-200 bg-paper-50 p-3 text-sm text-charcoal-900 focus:border-ink-700 focus:outline-none"/><div className="mt-3 flex justify-end"><button onClick={()=>void submit()} disabled={busy} className="flex items-center gap-2 rounded-lg bg-ink-800 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"><Send className="h-3.5 w-3.5"/>Post note</button></div><div className="mt-5 space-y-3">{notes.length===0&&<p className="text-sm text-charcoal-500">No notes for this patient yet.</p>}{notes.map(note=><div key={note.id} className="rounded-xl border border-paper-200 bg-paper-50 p-4"><div className="flex items-center justify-between"><p className="text-sm font-semibold text-charcoal-900">{note.author}</p><span className="text-xs text-charcoal-500">{new Date(note.timestamp).toLocaleString()}</span></div><Badge tone={note.authorRole==="doctor"?"ink":"neutral"}>{note.authorRole}</Badge><p className="mt-2 text-sm text-charcoal-700">{note.note}</p></div>)}</div></>}</Card>
+  </div>;
 }

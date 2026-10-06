@@ -53,6 +53,12 @@ enum VitalSource {
   CAREGIVER
 }
 
+enum ConnectionRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 model User {
   id                          Int                          @id @default(autoincrement())
   name                        String
@@ -74,6 +80,11 @@ model User {
   patientConnections          CareConnection[]             @relation("PatientConnections")
   caregiverConnections        CareConnection[]             @relation("CaregiverConnections")
   physicianConnections        CareConnection[]             @relation("PhysicianConnections")
+  patientPhysicianRequests    PhysicianConnectionRequest[] @relation("RequestPatient")
+  physicianConnectionRequests PhysicianConnectionRequest[] @relation("RequestPhysician")
+  sentConnectionRequests      PhysicianConnectionRequest[] @relation("RequestSender")
+  receivedConnectionRequests  PhysicianConnectionRequest[] @relation("RequestRecipient")
+  caregiverInvites            CaregiverInvite[]
 }
 
 model Medication {
@@ -207,4 +218,39 @@ model CareConnection {
   patient     User     @relation("PatientConnections", fields: [patientId], references: [id], onDelete: Cascade)
   caregiver   User?    @relation("CaregiverConnections", fields: [caregiverId], references: [id], onDelete: SetNull)
   physician   User?    @relation("PhysicianConnections", fields: [physicianId], references: [id], onDelete: SetNull)
+
+  @@unique([patientId, caregiverId])
+  @@unique([patientId, physicianId])
+  @@index([caregiverId])
+  @@index([physicianId])
+}
+
+model PhysicianConnectionRequest {
+  id          Int                     @id @default(autoincrement())
+  patientId   Int
+  physicianId Int
+  senderId    Int
+  recipientId Int
+  status      ConnectionRequestStatus @default(PENDING)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  patient     User                    @relation("RequestPatient", fields: [patientId], references: [id], onDelete: Cascade)
+  physician   User                    @relation("RequestPhysician", fields: [physicianId], references: [id], onDelete: Cascade)
+  sender      User                    @relation("RequestSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient   User                    @relation("RequestRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, physicianId])
+  @@index([recipientId, status])
+  @@index([senderId, status])
+}
+
+model CaregiverInvite {
+  id         Int       @id @default(autoincrement())
+  patientId  Int       @unique
+  codeHash   String    @unique
+  codeHint   String
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  consumedAt DateTime?
+  patient    User      @relation(fields: [patientId], references: [id], onDelete: Cascade)
 }

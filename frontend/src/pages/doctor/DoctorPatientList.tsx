@@ -17,7 +17,7 @@ export function DoctorPatientList() {
   const connect = async () => {
     if (!email.trim()) return;
     try {
-      const response = await roleDataApi.connect(email.trim());
+      const response = await roleDataApi.sendPhysicianRequest(email.trim());
       setMessage(response.message || "Patient connected successfully.");
       setEmail("");
       await load();
@@ -45,8 +45,8 @@ export function DoctorPatientList() {
 
       <section className="doctor-connect-panel">
         <span className="doctor-connect-panel__icon"><Link2 /></span>
-        <div className="doctor-connect-panel__copy"><p className="doctor-eyebrow">Panel access</p><h2>Connect a patient</h2><span>Add a patient using their HealthSync account email.</span></div>
-        <div className="doctor-connect-panel__control"><input value={email} onChange={(event) => setEmail(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void connect(); }} placeholder="Patient account email" /><button onClick={connect}><Link2 />Connect patient</button></div>
+        <div className="doctor-connect-panel__copy"><p className="doctor-eyebrow">Panel access</p><h2>Connect a patient</h2><span>Send a request using the patient's HealthSync account email.</span></div>
+        <div className="doctor-connect-panel__control"><input value={email} onChange={(event) => setEmail(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void connect(); }} placeholder="Patient account email" /><button onClick={connect}><Link2 />Send request</button></div>
         {message && <p className="doctor-connect-panel__message">{message}</p>}
       </section>
 

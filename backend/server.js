@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import http from "http";
+import crypto from "crypto";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { PrismaClient } from "./generated/prisma/client.ts";
@@ -995,40 +996,120 @@ app.patch("/api/alerts/:id/acknowledge", auth, async (req, res) => {
   } catch (error) { console.error("Acknowledge alert error:", error); res.status(500).json({ message: "Unable to acknowledge alert." }); }
 });
 
-app.post("/api/care-network/connect", auth, async (req, res) => {
+function physicianRequestView(request, userId) {
+  return {
+    id: request.id, status: request.status,
+    direction: request.senderId === userId ? "OUTGOING" : "INCOMING",
+    createdAt: request.createdAt.toISOString(), updatedAt: request.updatedAt.toISOString(),
+    patient: publicUser(request.patient), physician: publicUser(request.physician),
+    sender: publicUser(request.sender), recipient: publicUser(request.recipient),
+  };
+}
+
+const physicianRequestInclude = { patient: true, physician: true, sender: true, recipient: true };
+
+app.post("/api/care-network/physician-requests", auth, async (req, res) => {
+  if (!["PATIENT", "PHYSICIAN"].includes(req.user.role)) return res.status(403).json({ message: "Only patients and physicians can send physician connection requests." });
   const email = String(req.body?.email || "").trim().toLowerCase();
-  if (!email) return res.status(400).json({ message: "Enter the account email to connect." });
+  if (!email) return res.status(400).json({ message: "Enter the account email." });
   const target = await prisma.user.findUnique({ where: { email } });
   if (!target) return res.status(404).json({ message: "No HealthSync account found for that email." });
-  let patientId, caregiverId = null, physicianId = null;
+  if (target.id === Number(req.user.id)) return res.status(400).json({ message: "You cannot send a connection request to yourself." });
+  let patientId, physicianId;
   if (req.user.role === "PATIENT") {
     patientId = Number(req.user.id);
-    if (target.role === "CAREGIVER") caregiverId = target.id;
-    else if (target.role === "PHYSICIAN") physicianId = target.id;
-    else return res.status(400).json({ message: "Patients can connect only a caregiver or physician." });
-  } else if (req.user.role === "CAREGIVER") {
-    if (target.role !== "PATIENT") return res.status(400).json({ message: "Caregivers can connect only a patient." });
-    patientId = target.id; caregiverId = Number(req.user.id);
-  } else if (req.user.role === "PHYSICIAN") {
+    if (target.role !== "PHYSICIAN") return res.status(400).json({ message: "Enter a Physician account email." });
+    physicianId = target.id;
+  } else {
     if (target.role !== "PATIENT") return res.status(400).json({ message: "Physicians can connect only a patient." });
     patientId = target.id; physicianId = Number(req.user.id);
-  } else return res.status(403).json({ message: "Invalid role." });
-  const existing = await prisma.careConnection.findFirst({ where: { patientId, caregiverId, physicianId } });
-  if (existing) return res.json({ connection: existing, message: "Connection already exists." });
-  const connection = await prisma.careConnection.create({ data: { patientId, caregiverId, physicianId } });
-  const roleLabel = roleName(req.user.role);
-  const connectionAlert = await prisma.alert.create({
-    data: {
-      userId: patientId,
-      type: "care_connection",
-      message: `${req.user.name} connected as ${roleLabel} to the patient care team.`,
-      severity: "INFO",
-    },
+  }
+  const active = await prisma.careConnection.findFirst({ where: { patientId, physicianId } });
+  if (active) return res.status(409).json({ message: "This physician and patient are already connected." });
+  const senderId = Number(req.user.id), recipientId = target.id;
+  const existing = await prisma.physicianConnectionRequest.findUnique({ where: { patientId_physicianId: { patientId, physicianId } }, include: physicianRequestInclude });
+  if (existing?.status === "PENDING") return res.json({ request: physicianRequestView(existing, senderId), message: "A connection request is already pending." });
+  const request = await prisma.physicianConnectionRequest.upsert({
+    where: { patientId_physicianId: { patientId, physicianId } },
+    create: { patientId, physicianId, senderId, recipientId },
+    update: { senderId, recipientId, status: "PENDING" },
+    include: physicianRequestInclude,
   });
-  emitToUser(patientId, "care:updated", connection);
-  emitToUser(patientId, "alert:created", connectionAlert);
-  if (target.id !== Number(req.user.id)) emitToUser(target.id, "care:updated", connection);
-  res.status(201).json({ connection, message: "Connection created successfully. The care team can now share authorized updates." });
+  emitToUser(recipientId, "care:request", physicianRequestView(request, recipientId));
+  res.status(existing ? 200 : 201).json({ request: physicianRequestView(request, senderId), message: "Connection request sent." });
+});
+
+app.get("/api/care-network/physician-requests", auth, async (req, res) => {
+  if (!["PATIENT", "PHYSICIAN"].includes(req.user.role)) return res.status(403).json({ message: "Physician requests are not available for this role." });
+  const userId = Number(req.user.id);
+  const requests = await prisma.physicianConnectionRequest.findMany({ where: { OR: [{ senderId: userId }, { recipientId: userId }] }, include: physicianRequestInclude, orderBy: { updatedAt: "desc" } });
+  res.json({ requests: requests.map(request => physicianRequestView(request, userId)) });
+});
+
+app.patch("/api/care-network/physician-requests/:id/:action", auth, async (req, res) => {
+  const requestId = Number(req.params.id), action = String(req.params.action || "");
+  if (!["accept", "decline"].includes(action)) return res.status(404).json({ message: "Unknown request action." });
+  const request = await prisma.physicianConnectionRequest.findUnique({ where: { id: requestId }, include: physicianRequestInclude });
+  if (!request) return res.status(404).json({ message: "Connection request not found." });
+  if (request.recipientId !== Number(req.user.id)) return res.status(403).json({ message: "Only the intended recipient can resolve this request." });
+  if (request.status !== "PENDING") return res.status(409).json({ message: "This connection request has already been resolved." });
+  const result = await prisma.$transaction(async tx => {
+    const updated = await tx.physicianConnectionRequest.update({ where: { id: requestId }, data: { status: action === "accept" ? "ACCEPTED" : "DECLINED" }, include: physicianRequestInclude });
+    let connection = null;
+    if (action === "accept") connection = await tx.careConnection.upsert({ where: { patientId_physicianId: { patientId: request.patientId, physicianId: request.physicianId } }, create: { patientId: request.patientId, physicianId: request.physicianId }, update: {} });
+    return { updated, connection };
+  });
+  if (result.connection) { emitToUser(request.patientId, "care:updated", result.connection); emitToUser(request.physicianId, "care:updated", result.connection); }
+  res.json({ request: physicianRequestView(result.updated, Number(req.user.id)), connection: result.connection, message: action === "accept" ? "Connection request accepted." : "Connection request declined." });
+});
+
+app.get("/api/care-network/caregiver-invite", auth, async (req, res) => {
+  if (req.user.role !== "PATIENT") return res.status(403).json({ message: "Patient access required." });
+  const invite = await prisma.caregiverInvite.findUnique({ where: { patientId: Number(req.user.id) } });
+  res.json({ invite: invite?.active && !invite.consumedAt ? { active: true, codeHint: invite.codeHint, createdAt: invite.createdAt } : null });
+});
+
+app.post("/api/care-network/caregiver-invite", auth, async (req, res) => {
+  if (req.user.role !== "PATIENT") return res.status(403).json({ message: "Patient access required." });
+  const code = `HS-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+  const codeHash = crypto.createHash("sha256").update(code).digest("hex"), patientId = Number(req.user.id);
+  const invite = await prisma.caregiverInvite.upsert({ where: { patientId }, create: { patientId, codeHash, codeHint: code.slice(-4) }, update: { codeHash, codeHint: code.slice(-4), active: true, consumedAt: null, createdAt: new Date() } });
+  res.status(201).json({ invite: { code, active: true, codeHint: invite.codeHint, createdAt: invite.createdAt }, message: "A new one-time caregiver invite code was generated." });
+});
+
+app.post("/api/care-network/caregiver-invite/redeem", auth, async (req, res) => {
+  if (req.user.role !== "CAREGIVER") return res.status(403).json({ message: "Caregiver access required." });
+  const code = String(req.body?.code || "").trim().toUpperCase();
+  if (!/^HS-[A-F0-9]{8}$/.test(code)) return res.status(400).json({ message: "Enter a valid caregiver invite code." });
+  const codeHash = crypto.createHash("sha256").update(code).digest("hex"), caregiverId = Number(req.user.id);
+  const invite = await prisma.caregiverInvite.findUnique({ where: { codeHash } });
+  if (!invite || !invite.active || invite.consumedAt) return res.status(400).json({ message: "This caregiver invite code is invalid or has already been used." });
+  const alreadyConnected = await prisma.careConnection.findFirst({ where: { patientId: invite.patientId, caregiverId } });
+  if (alreadyConnected) return res.status(409).json({ message: "You are already connected to this patient." });
+  const result = await prisma.$transaction(async tx => {
+    const consumed = await tx.caregiverInvite.updateMany({ where: { id: invite.id, active: true, consumedAt: null }, data: { active: false, consumedAt: new Date() } });
+    if (consumed.count !== 1) throw new Error("INVITE_ALREADY_CONSUMED");
+    return tx.careConnection.create({ data: { patientId: invite.patientId, caregiverId } });
+  }).catch(error => { if (error.message === "INVITE_ALREADY_CONSUMED") return null; throw error; });
+  if (!result) return res.status(409).json({ message: "This caregiver invite code has already been used." });
+  emitToUser(invite.patientId, "care:updated", result); emitToUser(caregiverId, "care:updated", result);
+  res.status(201).json({ connection: result, message: "Patient connected successfully." });
+});
+
+app.delete("/api/care-network/connections/:id", auth, async (req, res) => {
+  const connection = await prisma.careConnection.findUnique({ where: { id: Number(req.params.id) } });
+  if (!connection) return res.status(404).json({ message: "Connection not found." });
+  const userId = Number(req.user.id);
+  if (![connection.patientId, connection.physicianId, connection.caregiverId].includes(userId)) return res.status(403).json({ message: "You cannot remove this connection." });
+  await prisma.careConnection.delete({ where: { id: connection.id } });
+  emitToUser(connection.patientId, "care:updated", { removedConnectionId: connection.id });
+  if (connection.physicianId) emitToUser(connection.physicianId, "care:updated", { removedConnectionId: connection.id });
+  if (connection.caregiverId) emitToUser(connection.caregiverId, "care:updated", { removedConnectionId: connection.id });
+  res.json({ success: true, message: "Care connection removed. Patient health records were not deleted." });
+});
+
+app.post("/api/care-network/connect", auth, (_req, res) => {
+  res.status(410).json({ message: "Use physician requests or a caregiver invite code to connect." });
 });
 
 app.get("/api/care-network", auth, async (req, res) => {
@@ -1055,11 +1136,12 @@ app.get("/api/care-network", auth, async (req, res) => {
     for (const row of rows) {
       const key = row.patientId;
       if (!grouped.has(key)) {
-        grouped.set(key, { patient: row.patient ? publicUser(row.patient) : null, caregiver: null, physician: null });
+        grouped.set(key, { patient: row.patient ? publicUser(row.patient) : null, caregiver: null, physician: null, members: [], ownConnectionId: null });
       }
       const item = grouped.get(key);
-      if (row.caregiver) item.caregiver = publicUser(row.caregiver);
-      if (row.physician) item.physician = publicUser(row.physician);
+      if (row.caregiver) { item.caregiver ||= publicUser(row.caregiver); item.members.push({ connectionId: row.id, ...publicUser(row.caregiver) }); }
+      if (row.physician) { item.physician ||= publicUser(row.physician); item.members.push({ connectionId: row.id, ...publicUser(row.physician) }); }
+      if ((req.user.role === "CAREGIVER" && row.caregiverId === Number(req.user.id)) || (req.user.role === "PHYSICIAN" && row.physicianId === Number(req.user.id))) item.ownConnectionId = row.id;
     }
 
     res.json({ connections: [...grouped.values()] });

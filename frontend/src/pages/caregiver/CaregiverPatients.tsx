@@ -17,7 +17,7 @@ export function CaregiverPatients() {
   const connect = async () => {
     if (!email.trim()) return;
     try {
-      const result = await roleDataApi.connect(email.trim());
+      const result = await roleDataApi.redeemCaregiverInvite(email.trim());
       setMessage(result.message || "Patient connected successfully.");
       setEmail("");
       await load();
@@ -29,12 +29,12 @@ export function CaregiverPatients() {
   return <div className="caregiver-directory space-y-6">
     <div><p className="caregiver-eyebrow">Care coordination</p><h1 className="font-display text-xl font-semibold text-charcoal-900 sm:text-2xl">Connected patients</h1><p className="mt-1 text-sm text-charcoal-500">Review the people in your care circle and open a complete support record.</p></div>
     <Card className="caregiver-connect-panel">
-      <div className="caregiver-connect-panel__heading"><span><Link2/></span><CardHeader title="Connect a patient" subtitle="Enter the patient's HealthSync account email. Once connected, the care team can share authorized updates." /></div>
-      <div className="flex flex-col gap-2 sm:flex-row"><input value={email} onChange={(event) => setEmail(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void connect(); }} placeholder="Patient account email" className="min-w-0 flex-1 rounded-xl border border-paper-300 bg-paper-50 px-3 py-2.5 text-sm outline-none focus:border-ink-700"/><button onClick={connect} className="flex items-center justify-center gap-2 rounded-xl bg-ink-800 px-4 py-2.5 text-xs font-semibold text-white"><Link2 className="h-3.5 w-3.5"/>Connect patient</button></div>
+      <div className="caregiver-connect-panel__heading"><span><Link2/></span><CardHeader title="Connect a patient" subtitle="Enter the one-time invite code shared by the patient." /></div>
+      <div className="flex flex-col gap-2 sm:flex-row"><input value={email} onChange={(event) => setEmail(event.target.value.toUpperCase())} onKeyDown={(event) => { if (event.key === "Enter") void connect(); }} placeholder="Caregiver invite code" className="min-w-0 flex-1 rounded-xl border border-paper-300 bg-paper-50 px-3 py-2.5 text-sm uppercase outline-none focus:border-ink-700"/><button onClick={connect} className="flex items-center justify-center gap-2 rounded-xl bg-ink-800 px-4 py-2.5 text-xs font-semibold text-white"><Link2 className="h-3.5 w-3.5"/>Connect patient</button></div>
       {message && <p className="mt-2 text-xs text-charcoal-500">{message}</p>}
     </Card>
     {error && <Card><p className="text-sm text-brick-700">{error}</p></Card>}
-    {!patients.length && !error && <Card className="caregiver-directory-empty"><span><Users2/></span><div><p className="font-semibold text-charcoal-900">Your care circle is ready to grow</p><p className="mt-1 text-sm text-charcoal-500">Connect a patient by account email to begin coordinating medications, readings, and alerts.</p></div></Card>}
+    {!patients.length && !error && <Card className="caregiver-directory-empty"><span><Users2/></span><div><p className="font-semibold text-charcoal-900">Your care circle is ready to grow</p><p className="mt-1 text-sm text-charcoal-500">Connect with a patient invite code to begin coordinating medications, readings, and alerts.</p></div></Card>}
     <div className="caregiver-patient-list">{patients.map((bundle) => {
       const unread = bundle.alerts?.filter((alert) => !alert.read).length || 0;
       const latest = bundle.vitals?.[0];
