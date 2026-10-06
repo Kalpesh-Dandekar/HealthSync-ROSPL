@@ -9,7 +9,7 @@ async function request<T>(path:string, options:RequestInit={}):Promise<T>{
 export interface CareTeamMember { id:number; name:string; email:string; role:"patient"|"caregiver"|"doctor"; }
 export interface PatientBundle { patient:any; medications:any[]; vitals:any[]; alerts:any[]; appointments:any[]; clinicalRecords?:import("./clinicalRecordApi").ClinicalRecord[]; careTeam?:CareTeamMember[]; adherenceRate:number; }
 export interface ReportRecord { id:string; patientId:number; patientName:string; title:string; category:"adherence"|"vitals"|"consultation"|"lab"|"clinical"; generatedOn:string; authoredBy:string; summary:string; }
-export interface EmergencyRecord { id:number; patientId:number; patientName:string; message:string; active:boolean; createdAt:string; }
+export interface EmergencyRecord { id:number; patientId:number; patientName:string; status:"ACTIVE"|"ACKNOWLEDGED"|"RESOLVED"; active:boolean; triggeredBy:{id:number;name:string;role:string}; respondingPhysician:{id:number;name:string}|null; caregiverAcknowledgements:{id:number;caregiverId:number;caregiverName:string;acknowledgedAt:string}[]; latestVital:any|null; medications:{name:string;dosage:string;schedule:string}[]; careTeam:CareTeamMember[]; latestClinicalRecord:{title:string;status:string;clinicalDate:string}|null; acknowledgedAt:string|null; resolvedAt:string|null; resolvedBy:{id:number;name:string}|null; resolutionNote:string|null; createdAt:string; updatedAt:string; }
 export const roleDataApi={
  getPatients:(role:"caregiver"|"doctor")=>request<{patients:PatientBundle[]}>(`/${role === "doctor" ? "doctor" : "caregiver"}/patients`),
  getPatient:(role:"caregiver"|"doctor", id:string|number)=>request<PatientBundle>(`/${role === "doctor" ? "doctor" : "caregiver"}/patients/${id}`),
@@ -39,4 +39,9 @@ export const roleDataApi={
  getCareNetwork:()=>request<{connections:any[]}>("/care-network"),
  getReports:()=>request<{reports:ReportRecord[]}>("/reports"),
  getEmergencies:()=>request<{emergencies:EmergencyRecord[]}>("/emergencies"),
+ getCurrentEmergency:(patientId?:string|number)=>request<{emergency:EmergencyRecord|null}>(`/emergencies/current${patientId?`?patientId=${patientId}`:""}`),
+ triggerEmergency:(patientId?:string|number)=>request<{emergency:EmergencyRecord;message:string}>("/emergencies",{method:"POST",body:JSON.stringify(patientId?{patientId:Number(patientId)}:{})}),
+ claimEmergency:(id:number)=>request<{emergency:EmergencyRecord}>(`/emergencies/${id}/claim`,{method:"POST"}),
+ acknowledgeEmergency:(id:number)=>request<{emergency:EmergencyRecord}>(`/emergencies/${id}/caregiver-acknowledge`,{method:"POST"}),
+ resolveEmergency:(id:number,resolutionNote:string)=>request<{emergency:EmergencyRecord}>(`/emergencies/${id}/resolve`,{method:"POST",body:JSON.stringify({resolutionNote})}),
 };

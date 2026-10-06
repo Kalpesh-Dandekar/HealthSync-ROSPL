@@ -9,10 +9,11 @@ export function DoctorPatientList() {
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  const [emergencyCount, setEmergencyCount] = useState(0);
   const navigate = useNavigate();
 
   const load = () => roleDataApi.getPatients("doctor").then((data) => setPatients(data.patients)).catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Unable to load patients."));
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { const refresh=()=>{void load();void roleDataApi.getEmergencies().then(data=>setEmergencyCount(data.emergencies.filter(item=>item.active).length)).catch(()=>undefined);};refresh();window.addEventListener("healthsync:realtime",refresh);return()=>window.removeEventListener("healthsync:realtime",refresh); }, []);
 
   const connect = async () => {
     if (!email.trim()) return;
@@ -27,7 +28,6 @@ export function DoctorPatientList() {
   };
 
   const attentionCount = patients.filter((bundle) => bundle.adherenceRate < 80 || bundle.alerts.some((alert) => !alert.read && !alert.acknowledged)).length;
-  const activeAlerts = patients.reduce((count, bundle) => count + bundle.alerts.filter((alert) => !alert.read && !alert.acknowledged).length, 0);
   const upcomingCount = patients.reduce((count, bundle) => count + bundle.appointments.filter((appointment) => ["upcoming", "Scheduled", "Confirmed", "REQUESTED", "CONFIRMED"].includes(appointment.status)).length, 0);
 
   return (
@@ -39,7 +39,7 @@ export function DoctorPatientList() {
       <section className="doctor-metrics" aria-label="Clinical workload summary">
         <article><span><UsersRound /></span><div><p>Connected patients</p><strong>{patients.length}</strong><small>Active clinical panel</small></div></article>
         <article><span><Activity /></span><div><p>Needs review</p><strong>{attentionCount}</strong><small>Adherence or alert signals</small></div></article>
-        <article><span><AlertTriangle /></span><div><p>Active alerts</p><strong>{activeAlerts}</strong><small>Across connected patients</small></div></article>
+        <article><span><AlertTriangle /></span><div><p>Active emergencies</p><strong>{emergencyCount}</strong><small>System-wide SOS queue</small></div></article>
         <article><span><CalendarClock /></span><div><p>Upcoming care</p><strong>{upcomingCount}</strong><small>Scheduled appointments</small></div></article>
       </section>
 

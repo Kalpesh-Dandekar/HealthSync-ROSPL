@@ -198,7 +198,10 @@ function clinicalRecordView(record) {
 async function getAssignedPatientIds(userId, role) {
   const where = role === "PHYSICIAN" ? { physicianId: userId } : { caregiverId: userId };
   const connections = await prisma.careConnection.findMany({ where, select: { patientId: true } });
-  return [...new Set(connections.map(c => c.patientId))];
+  const emergencyPatients = role === "PHYSICIAN"
+    ? await prisma.emergency.findMany({ where: { respondingPhysicianId: userId, status: "ACKNOWLEDGED" }, select: { patientId: true } })
+    : [];
+  return [...new Set([...connections, ...emergencyPatients].map(c => c.patientId))];
 }
 
 async function getPatientBundle(patientId) {
@@ -248,6 +251,65 @@ function emitToUser(userId, event, payload) {
   io.sockets.sockets.forEach(socket => {
     if (Number(socket.user?.id) === Number(userId)) socket.emit(event, payload);
   });
+}
+
+function emitToRole(role, event, payload) {
+  io.sockets.sockets.forEach(socket => {
+    if (socket.user?.role === role) socket.emit(event, payload);
+  });
+}
+
+const emergencyInclude = {
+  patient: { select: { id: true, name: true, medications: { select: { name: true, dosage: true, schedule: true } }, vitals: { orderBy: { recordedAt: "desc" }, take: 1 }, patientConnections: { include: { caregiver: { select: { id: true, name: true, role: true } }, physician: { select: { id: true, name: true, role: true } } } }, patientClinicalRecords: { select: { title: true, status: true, clinicalDate: true }, orderBy: { clinicalDate: "desc" }, take: 1 } } },
+  triggeredBy: { select: { id: true, name: true, role: true } },
+  respondingPhysician: { select: { id: true, name: true } },
+  resolvedBy: { select: { id: true, name: true } },
+  caregiverAcknowledgements: { include: { caregiver: { select: { id: true, name: true } } }, orderBy: { acknowledgedAt: "asc" } },
+};
+
+function emergencyView(emergency) {
+  const members = new Map();
+  for (const connection of emergency.patient.patientConnections || []) {
+    for (const member of [connection.caregiver, connection.physician]) if (member) members.set(member.id, { id: member.id, name: member.name, role: roleName(member.role) });
+  }
+  return {
+    id: emergency.id, patientId: emergency.patientId, patientName: emergency.patient.name,
+    status: emergency.status, active: emergency.status !== "RESOLVED",
+    triggeredBy: { id: emergency.triggeredBy.id, name: emergency.triggeredBy.name, role: roleName(emergency.triggeredBy.role) },
+    respondingPhysician: emergency.respondingPhysician,
+    caregiverAcknowledgements: emergency.caregiverAcknowledgements.map(item => ({ id: item.id, caregiverId: item.caregiverId, caregiverName: item.caregiver.name, acknowledgedAt: item.acknowledgedAt.toISOString() })),
+    latestVital: emergency.patient.vitals[0] ? vitalView(emergency.patient.vitals[0]) : null,
+    medications: emergency.patient.medications,
+    careTeam: [...members.values()],
+    latestClinicalRecord: emergency.patient.patientClinicalRecords[0] || null,
+    acknowledgedAt: emergency.acknowledgedAt?.toISOString() || null,
+    resolvedAt: emergency.resolvedAt?.toISOString() || null,
+    resolvedBy: emergency.resolvedBy,
+    resolutionNote: emergency.resolutionNote,
+    createdAt: emergency.createdAt.toISOString(), updatedAt: emergency.updatedAt.toISOString(),
+  };
+}
+
+async function notifyEmergency(event, emergency) {
+  const caregiverConnections = await prisma.careConnection.findMany({ where: { patientId: emergency.patientId, caregiverId: { not: null } }, select: { caregiverId: true } });
+  const payload = { id: emergency.id, patientId: emergency.patientId, status: emergency.status, respondingPhysician: emergency.respondingPhysician || null, updatedAt: emergency.updatedAt };
+  emitToUser(emergency.patientId, event, payload);
+  emitToRole("PHYSICIAN", event, payload);
+  for (const connection of caregiverConnections) emitToUser(connection.caregiverId, event, payload);
+}
+
+async function createEmergency(patientId, actor) {
+  try {
+    const emergency = await prisma.emergency.create({ data: { patientId, triggeredById: Number(actor.id), triggeredByRole: actor.role, activePatientKey: patientId }, include: emergencyInclude });
+    await notifyEmergency("emergency:created", emergency);
+    return { emergency };
+  } catch (error) {
+    if (error?.code === "P2002") {
+      const current = await prisma.emergency.findFirst({ where: { patientId, status: { in: ["ACTIVE", "ACKNOWLEDGED"] } }, include: emergencyInclude });
+      return { conflict: current };
+    }
+    throw error;
+  }
 }
 
 const APPOINTMENT_ACTIVE = ["REQUESTED", "CONFIRMED"];
@@ -379,29 +441,11 @@ app.post("/api/handoff-notes", auth, async (req, res) => {
 
 app.post("/api/sos", auth, async (req, res) => {
   const active = Boolean(req.body?.active);
-  if (req.user.role === "PATIENT") {
-    if (!active) return res.json({ active: false });
-    const caregiverConnections = await prisma.careConnection.findMany({ where: { patientId: Number(req.user.id), caregiverId: { not: null } }, select: { caregiverId: true } });
-    const doctorConnections = await prisma.careConnection.findMany({ where: { patientId: Number(req.user.id), physicianId: { not: null } }, select: { physicianId: true } });
-    const recipients = [...new Set([...caregiverConnections.map(x => x.caregiverId).filter(Boolean), ...doctorConnections.map(x => x.physicianId).filter(Boolean)])];
-    const alert = await prisma.alert.create({ data: { userId: Number(req.user.id), type: "emergency", message: `Emergency SOS triggered by ${req.user.name}.`, severity: "HIGH" } });
-    for (const id of recipients) emitToUser(id, "sos:updated", { active: true, patientId: Number(req.user.id), patientName: req.user.name, alertId: alert.id });
-    return res.json({ active: true });
-  }
-  if (!active && ["CAREGIVER", "PHYSICIAN"].includes(req.user.role)) {
-    const ids = await getAssignedPatientIds(Number(req.user.id), req.user.role);
-    if (!ids.length) return res.status(403).json({ message: "No connected patient." });
-    const requestedAlertId = Number(req.body?.alertId || 0);
-    let emergency = requestedAlertId ? await prisma.alert.findUnique({ where: { id: requestedAlertId } }) : null;
-    if (emergency && (!ids.includes(emergency.userId) || emergency.type !== "emergency")) return res.status(403).json({ message: "You cannot resolve this emergency." });
-    if (!emergency) emergency = await prisma.alert.findFirst({ where: { userId: { in: ids }, type: "emergency", read: false }, orderBy: { createdAt: "desc" } });
-    if (emergency) {
-      await prisma.alert.update({ where: { id: emergency.id }, data: { read: true } });
-      emitToUser(emergency.userId, "alert:updated", { id: emergency.id, read: true });
-    }
-    return res.json({ active: false });
-  }
-  return res.status(403).json({ message: "Only patients can trigger SOS." });
+  if (!active) return res.status(410).json({ message: "Emergencies must be resolved by the responding physician." });
+  if (req.user.role !== "PATIENT") return res.status(403).json({ message: "Use the emergency endpoint to trigger an SOS for a connected patient." });
+  const result = await createEmergency(Number(req.user.id), req.user);
+  if (result.conflict) return res.status(409).json({ message: "An unresolved emergency already exists for this patient.", emergency: emergencyView(result.conflict) });
+  res.status(201).json({ active: true, emergency: emergencyView(result.emergency) });
 });
 
 // ---------------- Caregiver patient actions ----------------
@@ -667,18 +711,11 @@ app.get("/api/reports", auth, async (req, res) => {
 
 app.get("/api/emergencies", auth, async (req, res) => {
   try {
-    const patientIds = req.user.role === "PATIENT"
-      ? [Number(req.user.id)]
-      : await getAssignedPatientIds(Number(req.user.id), req.user.role);
-    if (!patientIds.length) return res.json({ emergencies: [] });
-    const alerts = await prisma.alert.findMany({
-      where: { userId: { in: patientIds }, type: "emergency" },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    });
-    const users = await prisma.user.findMany({ where: { id: { in: patientIds } }, select: { id: true, name: true } });
-    const names = new Map(users.map(u => [u.id, u.name]));
-    res.json({ emergencies: alerts.map(a => ({ id: a.id, patientId: a.userId, patientName: names.get(a.userId) || "Patient", message: a.message, active: !a.read, createdAt: a.createdAt })) });
+    let where = {};
+    if (req.user.role === "PATIENT") where = { patientId: Number(req.user.id) };
+    if (req.user.role === "CAREGIVER") where = { patientId: { in: await getAssignedPatientIds(Number(req.user.id), "CAREGIVER") } };
+    const emergencies = await prisma.emergency.findMany({ where, include: emergencyInclude, orderBy: { createdAt: "desc" }, take: 100 });
+    res.json({ emergencies: emergencies.map(emergencyView) });
   } catch (error) {
     console.error("Emergency log error:", error);
     res.status(500).json({ message: "Unable to load emergency history." });
@@ -1266,6 +1303,63 @@ app.post("/api/appointments", auth, async (req, res) => {
     if (error?.code === "P2002") return res.status(409).json({ message: "This time slot is no longer available. Please choose another." });
     console.error("Create appointment error:", error); res.status(500).json({ message: "Unable to request appointment." });
   }
+});
+
+app.get("/api/emergencies/current", auth, async (req, res) => {
+  let patientId = req.user.role === "PATIENT" ? Number(req.user.id) : Number(req.query.patientId || 0);
+  if (!patientId) return res.status(400).json({ message: "Patient is required." });
+  if (req.user.role !== "PATIENT" && !(await requireAssigned(req, res, patientId))) return res.status(403).json({ message: "You are not authorized to view this patient." });
+  const emergency = await prisma.emergency.findFirst({ where: { patientId }, include: emergencyInclude, orderBy: { createdAt: "desc" } });
+  res.json({ emergency: emergency ? emergencyView(emergency) : null });
+});
+
+app.post("/api/emergencies", auth, async (req, res) => {
+  if (!["PATIENT", "CAREGIVER"].includes(req.user.role)) return res.status(403).json({ message: "Only a patient or connected caregiver can trigger an emergency." });
+  const patientId = req.user.role === "PATIENT" ? Number(req.user.id) : Number(req.body?.patientId || 0);
+  if (!patientId) return res.status(400).json({ message: "Patient is required." });
+  if (req.user.role === "CAREGIVER" && !(await requireAssigned(req, res, patientId))) return res.status(403).json({ message: "You are not connected to this patient." });
+  const result = await createEmergency(patientId, req.user);
+  if (result.conflict) return res.status(409).json({ message: "An unresolved emergency already exists for this patient.", emergency: emergencyView(result.conflict) });
+  const caregiverCount = await prisma.careConnection.count({ where: { patientId, caregiverId: { not: null } } });
+  res.status(201).json({ emergency: emergencyView(result.emergency), message: caregiverCount ? "Emergency sent to physicians and connected caregivers." : "Emergency sent to the physician response queue." });
+});
+
+app.post("/api/emergencies/:id/claim", auth, async (req, res) => {
+  if (req.user.role !== "PHYSICIAN") return res.status(403).json({ message: "Physician access required." });
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "A valid emergency ID is required." });
+  const result = await prisma.emergency.updateMany({ where: { id, status: "ACTIVE", respondingPhysicianId: null }, data: { status: "ACKNOWLEDGED", respondingPhysicianId: Number(req.user.id), acknowledgedAt: new Date() } });
+  const emergency = await prisma.emergency.findUnique({ where: { id }, include: emergencyInclude });
+  if (!emergency) return res.status(404).json({ message: "Emergency not found." });
+  if (!result.count) return res.status(409).json({ message: emergency.respondingPhysicianId === Number(req.user.id) ? "You are already responding to this emergency." : "This emergency has already been claimed.", emergency: emergencyView(emergency) });
+  await notifyEmergency("emergency:claimed", emergency);
+  res.json({ emergency: emergencyView(emergency) });
+});
+
+app.post("/api/emergencies/:id/caregiver-acknowledge", auth, async (req, res) => {
+  if (req.user.role !== "CAREGIVER") return res.status(403).json({ message: "Caregiver access required." });
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "A valid emergency ID is required." });
+  const emergency = await prisma.emergency.findUnique({ where: { id }, include: emergencyInclude });
+  if (!emergency) return res.status(404).json({ message: "Emergency not found." });
+  if (!(await requireAssigned(req, res, emergency.patientId))) return res.status(403).json({ message: "You are not connected to this patient." });
+  await prisma.emergencyCaregiverAcknowledgement.upsert({ where: { emergencyId_caregiverId: { emergencyId: id, caregiverId: Number(req.user.id) } }, create: { emergencyId: id, caregiverId: Number(req.user.id) }, update: {} });
+  const updated = await prisma.emergency.findUnique({ where: { id }, include: emergencyInclude });
+  await notifyEmergency("emergency:caregiver-acknowledged", updated);
+  res.json({ emergency: emergencyView(updated) });
+});
+
+app.post("/api/emergencies/:id/resolve", auth, async (req, res) => {
+  if (req.user.role !== "PHYSICIAN") return res.status(403).json({ message: "Physician access required." });
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "A valid emergency ID is required." });
+  const resolutionNote = String(req.body?.resolutionNote || "").trim().slice(0, 2000) || null;
+  const result = await prisma.emergency.updateMany({ where: { id, status: "ACKNOWLEDGED", respondingPhysicianId: Number(req.user.id) }, data: { status: "RESOLVED", resolvedById: Number(req.user.id), resolvedAt: new Date(), resolutionNote, activePatientKey: null } });
+  const emergency = await prisma.emergency.findUnique({ where: { id }, include: emergencyInclude });
+  if (!emergency) return res.status(404).json({ message: "Emergency not found." });
+  if (!result.count) return res.status(409).json({ message: "Only the responding physician can resolve this active emergency.", emergency: emergencyView(emergency) });
+  await notifyEmergency("emergency:resolved", emergency);
+  res.json({ emergency: emergencyView(emergency) });
 });
 
 app.patch("/api/appointments/:id/status", auth, async (req, res) => {

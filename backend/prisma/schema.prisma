@@ -59,32 +59,43 @@ enum ConnectionRequestStatus {
   DECLINED
 }
 
+enum EmergencyStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
 model User {
-  id                          Int                          @id @default(autoincrement())
+  id                          Int                                 @id @default(autoincrement())
   name                        String
-  email                       String                       @unique
+  email                       String                              @unique
   password                    String
-  role                        UserRole                     @default(PATIENT)
-  createdAt                   DateTime                     @default(now())
+  role                        UserRole                            @default(PATIENT)
+  createdAt                   DateTime                            @default(now())
   medications                 Medication[]
   medicationLogs              MedicationLog[]
-  vitals                      Vital[]                      @relation("PatientVitals")
-  recordedVitals              Vital[]                      @relation("RecordedVitals")
-  patientAppointments         Appointment[]                @relation("PatientAppointments")
-  physicianAppointments       Appointment[]                @relation("PhysicianAppointments")
+  vitals                      Vital[]                             @relation("PatientVitals")
+  recordedVitals              Vital[]                             @relation("RecordedVitals")
+  patientAppointments         Appointment[]                       @relation("PatientAppointments")
+  physicianAppointments       Appointment[]                       @relation("PhysicianAppointments")
   physicianAvailability       PhysicianAvailability[]
   physicianUnavailablePeriods PhysicianUnavailablePeriod[]
-  patientClinicalRecords      ClinicalRecord[]             @relation("PatientClinicalRecords")
-  authoredClinicalRecords     ClinicalRecord[]             @relation("PhysicianClinicalRecords")
+  patientClinicalRecords      ClinicalRecord[]                    @relation("PatientClinicalRecords")
+  authoredClinicalRecords     ClinicalRecord[]                    @relation("PhysicianClinicalRecords")
   alerts                      Alert[]
-  patientConnections          CareConnection[]             @relation("PatientConnections")
-  caregiverConnections        CareConnection[]             @relation("CaregiverConnections")
-  physicianConnections        CareConnection[]             @relation("PhysicianConnections")
-  patientPhysicianRequests    PhysicianConnectionRequest[] @relation("RequestPatient")
-  physicianConnectionRequests PhysicianConnectionRequest[] @relation("RequestPhysician")
-  sentConnectionRequests      PhysicianConnectionRequest[] @relation("RequestSender")
-  receivedConnectionRequests  PhysicianConnectionRequest[] @relation("RequestRecipient")
+  patientConnections          CareConnection[]                    @relation("PatientConnections")
+  caregiverConnections        CareConnection[]                    @relation("CaregiverConnections")
+  physicianConnections        CareConnection[]                    @relation("PhysicianConnections")
+  patientPhysicianRequests    PhysicianConnectionRequest[]        @relation("RequestPatient")
+  physicianConnectionRequests PhysicianConnectionRequest[]        @relation("RequestPhysician")
+  sentConnectionRequests      PhysicianConnectionRequest[]        @relation("RequestSender")
+  receivedConnectionRequests  PhysicianConnectionRequest[]        @relation("RequestRecipient")
   caregiverInvites            CaregiverInvite[]
+  patientEmergencies          Emergency[]                         @relation("PatientEmergencies")
+  triggeredEmergencies        Emergency[]                         @relation("TriggeredEmergencies")
+  respondingEmergencies       Emergency[]                         @relation("RespondingEmergencies")
+  resolvedEmergencies         Emergency[]                         @relation("ResolvedEmergencies")
+  emergencyAcknowledgements   EmergencyCaregiverAcknowledgement[]
 }
 
 model Medication {
@@ -253,4 +264,41 @@ model CaregiverInvite {
   createdAt  DateTime  @default(now())
   consumedAt DateTime?
   patient    User      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model Emergency {
+  id                        Int                                 @id @default(autoincrement())
+  patientId                 Int
+  triggeredById             Int
+  triggeredByRole           UserRole
+  status                    EmergencyStatus                     @default(ACTIVE)
+  respondingPhysicianId     Int?
+  acknowledgedAt            DateTime?
+  resolvedById              Int?
+  resolvedAt                DateTime?
+  resolutionNote            String?                             @db.Text
+  activePatientKey          Int?                                @unique
+  createdAt                 DateTime                            @default(now())
+  updatedAt                 DateTime                            @updatedAt
+  patient                   User                                @relation("PatientEmergencies", fields: [patientId], references: [id], onDelete: Cascade)
+  triggeredBy               User                                @relation("TriggeredEmergencies", fields: [triggeredById], references: [id], onDelete: Restrict)
+  respondingPhysician       User?                               @relation("RespondingEmergencies", fields: [respondingPhysicianId], references: [id], onDelete: SetNull)
+  resolvedBy                User?                               @relation("ResolvedEmergencies", fields: [resolvedById], references: [id], onDelete: SetNull)
+  caregiverAcknowledgements EmergencyCaregiverAcknowledgement[]
+
+  @@index([status, createdAt])
+  @@index([patientId, createdAt])
+  @@index([respondingPhysicianId, status])
+}
+
+model EmergencyCaregiverAcknowledgement {
+  id             Int       @id @default(autoincrement())
+  emergencyId    Int
+  caregiverId    Int
+  acknowledgedAt DateTime  @default(now())
+  emergency      Emergency @relation(fields: [emergencyId], references: [id], onDelete: Cascade)
+  caregiver      User      @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@unique([emergencyId, caregiverId])
+  @@index([caregiverId, acknowledgedAt])
 }

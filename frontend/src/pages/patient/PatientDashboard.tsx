@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { AlertTriangle, ArrowRight, BrainCircuit, CheckCircle2, HeartHandshake, Pill, ShieldCheck, Sparkles, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
@@ -5,6 +6,8 @@ import { AdherenceRing } from "../../components/ui/AdherenceRing";
 import { RiskBadge } from "../../components/ui/RiskBadge";
 import { useAppData } from "../../data/AppDataContext";
 import type { DoseEvent } from "../../types";
+import { roleDataApi, type EmergencyRecord } from "../../api/roleData";
+import { EmergencyDialog } from "../../components/emergency/EmergencyDialog";
 import "./PatientDashboard.css";
 
 function doseStatusBadge(status: DoseEvent["status"], takenAt?: string) {
@@ -19,7 +22,19 @@ function riskLabel(band: "low" | "medium" | "high") {
 }
 
 export function PatientDashboard() {
-  const { patient, medicines, alerts, adherenceRate, logDose, sosActive, toggleSos, riskAssessment } = useAppData();
+  const { patient, medicines, alerts, adherenceRate, logDose, riskAssessment } = useAppData();
+  const [emergency, setEmergency] = useState<EmergencyRecord | null>(null);
+  const [sosMessage, setSosMessage] = useState("");
+  const [sosDialogOpen,setSosDialogOpen]=useState(false);
+  const [sendingSos,setSendingSos]=useState(false);
+  useEffect(() => { const load=()=>void roleDataApi.getCurrentEmergency().then(data => setEmergency(data.emergency)).catch(() => undefined); load(); window.addEventListener("healthsync:realtime",load); return()=>window.removeEventListener("healthsync:realtime",load); }, []);
+  const triggerSos = async () => {
+    if (emergency?.active) return;
+    setSendingSos(true);setSosMessage("");
+    try { const result = await roleDataApi.triggerEmergency(); setEmergency(result.emergency); setSosMessage("Emergency SOS sent.");setSosDialogOpen(false); }
+    catch (cause) { setSosMessage(cause instanceof Error ? cause.message : "Unable to send the emergency alert. Please try again.");setSosDialogOpen(false); }
+    finally{setSendingSos(false);}
+  };
   const riskPercent = Math.round(riskAssessment.overall.score * 100);
   const topRisk = [...riskAssessment.perMedicine].sort((a, b) => b.risk.score - a.risk.score)[0];
   const activeAlerts = alerts.filter((alert) => !alert.acknowledged);
@@ -35,10 +50,13 @@ export function PatientDashboard() {
           <h1>Good morning, {patient.name.split(" ")[0]}</h1>
           <p>Your medication plan, care network and AI adherence insight are up to date.</p>
         </div>
-        <button type="button" onClick={toggleSos} className={`patient-overview__sos ${sosActive ? "is-active" : ""}`}>
-          <AlertTriangle aria-hidden="true" />{sosActive ? "Emergency alert sent" : "Emergency SOS"}
+        <button type="button" onClick={() => setSosDialogOpen(true)} disabled={Boolean(emergency?.active)} className={`patient-overview__sos ${emergency?.active ? "is-active" : ""}`}>
+          <AlertTriangle aria-hidden="true" />{emergency?.active?"Emergency in progress":"Emergency SOS"}
         </button>
       </header>
+      {sosMessage && <div className={`patient-emergency-feedback ${sosMessage.includes("sent")?"is-success":"is-error"}`} role="status">{sosMessage}</div>}
+      {emergency&&<div className={`patient-emergency-state is-${emergency.status.toLowerCase()}`}><span><AlertTriangle/></span><div><small>{emergency.status==="ACTIVE"?"SOS active":emergency.status==="ACKNOWLEDGED"?"Physician responding":"Emergency resolved"}</small><strong>{emergency.status==="ACTIVE"?"Awaiting a physician response":emergency.status==="ACKNOWLEDGED"?(emergency.respondingPhysician?.name||"Physician responding"):(emergency.resolvedBy?.name?`Resolved by ${emergency.resolvedBy.name}`:"Resolved")}</strong><p>{emergency.status==="ACTIVE"?`Triggered ${new Date(emergency.createdAt).toLocaleString()}`:emergency.status==="ACKNOWLEDGED"&&emergency.acknowledgedAt?`Responded ${new Date(emergency.acknowledgedAt).toLocaleString()}`:emergency.resolvedAt?`Resolved ${new Date(emergency.resolvedAt).toLocaleString()}`:""}</p></div></div>}
+      <EmergencyDialog open={sosDialogOpen} eyebrow="Urgent care signal" title="Send an emergency alert?" description={<>This will immediately alert the <strong>HealthSync physician network</strong> and your connected caregivers.</>} note="HealthSync does not contact external emergency services." confirmLabel="Send Emergency SOS" busyLabel="Sending SOS…" busy={sendingSos} onClose={()=>setSosDialogOpen(false)} onConfirm={()=>void triggerSos()}/>
 
       <section className="patient-summary" aria-label="Today's health summary">
         <article className="summary-card summary-card--adherence">
