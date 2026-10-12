@@ -10,7 +10,9 @@
     "prisma:validate": "prisma validate",
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:studio": "prisma studio",
-    "link-demo-team": "node scripts/link-first-care-team.js"
+    "link-demo-team": "node scripts/link-first-care-team.js",
+    "seed:demo": "node --experimental-strip-types scripts/seed-demo.js",
+    "seed:demo:clean": "node --experimental-strip-types scripts/seed-demo.js --clean"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.0.0",

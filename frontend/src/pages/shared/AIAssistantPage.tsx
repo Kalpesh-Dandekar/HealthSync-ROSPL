@@ -1,159 +1,182 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, AlertTriangle, BellRing, Bot, Brain, CalendarDays, ChevronDown, ChevronUp, CircleAlert, HeartPulse, Pill, Send, ShieldCheck, Sparkles, UserRound } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Activity, AlertTriangle, Bot, Brain, CheckCircle2, ChevronDown, CircleAlert, Pill, Send, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { Card } from "../../components/ui/Card";
-import { roleDataApi, type PatientBundle } from "../../api/roleData";
+import { ApiRequestError, roleDataApi, type AiContextResponse, type AiMetadata, type AiPatientChoice, type AiRole, type AiSource } from "../../api/roleData";
 
-type Message = { role: "user" | "assistant"; text: string };
-type AiMeta = { provider?: string; model?: string | null; live?: boolean; grounded?: boolean };
+type Message = { id:number; role:"user"|"assistant"; text:string; ai?:AiMetadata; sources?:AiSource[] };
+type ToolKind = "insights"|"medication"|"vitals"|"symptoms";
 
-function latestVital(patient?: PatientBundle) {
-  return patient?.vitals?.[0];
+const prompts:Record<AiRole,string[]> = {
+  patient: ["Summarize my HealthSync records", "How is my medication adherence?", "Explain my recent vitals", "What is my next appointment?", "Explain my latest clinical record"],
+  doctor: ["Give me a concise clinical summary", "Summarize recent vital trends", "Review medication adherence", "Summarize recent clinical records", "What should I review before the next appointment?"],
+  caregiver: ["Summarize recent care activity", "How is medication adherence?", "Are there any recent alerts?", "What appointments are coming up?", "What should I pay attention to?"],
+};
+
+const roleCopy:Record<AiRole,{subtitle:string;empty:string;safety:string}> = {
+  patient: { subtitle:"Understand your medications, vitals, appointments and recent care records.", empty:"Ask about your medications, recent vitals, appointments or HealthSync records.", safety:"HealthSync AI can summarize your records and provide general information. It does not replace professional medical advice." },
+  doctor: { subtitle:"Review authorized patient records with concise clinical summaries.", empty:"Select a patient, then ask for a clinical summary, recent trends or record review.", safety:"HealthSync AI is decision support. It does not replace professional medical judgment." },
+  caregiver: { subtitle:"Stay informed about medications, appointments and recent care activity.", empty:"Select a patient, then ask about adherence, appointments or recent care activity.", safety:"HealthSync AI supports care coordination and general information. It does not provide a diagnosis." },
+};
+
+const toolCards:{kind:Exclude<ToolKind,"symptoms">;title:string;description:string;button:string;icon:typeof Sparkles}[] = [
+  {kind:"insights",title:"AI Health Insights",description:"A concise, record-grounded care summary.",button:"Generate insights",icon:Sparkles},
+  {kind:"medication",title:"Medication AI Coach",description:"Adherence, missed doses, reminders and stock.",button:"Review medications",icon:Pill},
+  {kind:"vitals",title:"Vital Trend AI",description:"Recorded ranges and recent vital patterns.",button:"Review vital trends",icon:Activity},
+];
+
+function modeLabel(ai?:AiMetadata) {
+  if (!ai) return "";
+  return ({record:"Record grounded",general:"General information",safety:"Safety guidance",urgent:"Urgent guidance",fallback:"Local fallback"} as const)[ai.mode] || "HealthSync AI";
 }
 
-function vitalLabel(value: unknown, suffix = "") {
-  return value === null || value === undefined || value === "" ? "—" : `${value}${suffix}`;
+function accessLabel(accessType:AiPatientChoice["accessType"]) {
+  return accessType === "EMERGENCY" ? "Emergency access" : accessType === "CARE_NETWORK" ? "Care Network" : "Your HealthSync records";
+}
+
+function SourceChips({sources=[]}:{sources?:AiSource[]}) {
+  if (!sources.length) return null;
+  return <div className="mt-3 flex flex-wrap gap-1.5" aria-label="HealthSync record sources">{sources.map(source=><span key={source.type} className="rounded-full border border-[#c7dfd3] bg-[#e8f4ee] px-2.5 py-1 text-[10px] font-semibold text-[#236747]">{source.label} · {source.count}{source.includedCount<source.count?` (${source.includedCount} recent)`:""}</span>)}</div>;
+}
+
+function initialRole():AiRole {
+  try {
+    const role=JSON.parse(localStorage.getItem("healthsync_user")||"{}").role;
+    return role==="doctor"||role==="caregiver"?role:"patient";
+  } catch { return "patient"; }
 }
 
 export function AIAssistantPage() {
-  const [messages, setMessages] = useState<Message[]>([{ role: "assistant", text: "Hi. I’m the HealthSync AI Assistant. Ask me about your authorized HealthSync records, medications, vitals, appointments, alerts, or general health information." }]);
-  const [draft, setDraft] = useState("");
-  const [symptoms, setSymptoms] = useState("");
-  const [busy, setBusy] = useState("");
-  const [insights, setInsights] = useState<string[]>([]);
-  const [toolAnswer, setToolAnswer] = useState("");
-  const [toolTitle, setToolTitle] = useState("AI analysis");
-  const [showAnalysis, setShowAnalysis] = useState(true);
-  const [aiMeta, setAiMeta] = useState<AiMeta>({});
-  const [status, setStatus] = useState<{ollama:boolean;model:string|null;message:string} | null>(null);
-  const [patients, setPatients] = useState<PatientBundle[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState(0);
-  const resultRef = useRef<HTMLDivElement>(null);
+  const [role,setRole]=useState<AiRole>(initialRole);
+  const [patients,setPatients]=useState<AiPatientChoice[]>([]);
+  const [selectedPatientId,setSelectedPatientId]=useState<number|null>(null);
+  const [status,setStatus]=useState<{ollama:boolean;model:string|null;message:string}|null>(null);
+  const [messages,setMessages]=useState<Message[]>([]);
+  const [draft,setDraft]=useState("");
+  const [symptoms,setSymptoms]=useState("");
+  const [busy,setBusy]=useState<"chat"|ToolKind|"">("");
+  const [error,setError]=useState("");
+  const [contextLoading,setContextLoading]=useState(true);
+  const messageId=useRef(0);
+  const endRef=useRef<HTMLDivElement>(null);
 
-  const activePatient = patients[selectedPatient];
-  const vital = latestVital(activePatient);
-  const openAlerts = useMemo(() => activePatient?.alerts?.filter(a => !a.read).slice(0, 4) || [], [activePatient]);
+  const professional=role!=="patient";
+  const activePatient=professional?patients.find(patient=>patient.id===selectedPatientId)||null:patients[0]||null;
+  const ready=!professional||Boolean(activePatient);
+  const selectedScope=professional?activePatient?.id:undefined;
 
-  useEffect(() => {
-    Promise.all([roleDataApi.aiStatus(), roleDataApi.aiContext()])
-      .then(([ai, context]) => { setStatus(ai); setPatients(context.patients || []); })
-      .catch(() => setStatus(null));
-  }, []);
+  const clearConversation=useCallback(()=>{setMessages([]);setError("");setDraft("");setSymptoms("");},[]);
 
-  const showError = (err: unknown) => err instanceof Error ? err.message : "AI service is temporarily unavailable.";
+  const applyContext=useCallback((context:AiContextResponse,allowAutoSelect=true)=>{
+    setRole(context.role);
+    setPatients(context.patients||[]);
+    setSelectedPatientId(current=>{
+      if(context.role==="patient") return null;
+      if(current&&context.patients.some(patient=>patient.id===current)) return current;
+      if(allowAutoSelect&&context.patients.length===1) return context.patients[0].id;
+      return null;
+    });
+  },[]);
 
-  const ask = async (question:string) => {
-    setMessages(m => [...m, {role:"user", text:question}]);
-    setBusy("chat");
-    try {
-      const data = await roleDataApi.chat(question);
-      setMessages(m => [...m, {role:"assistant", text:data.answer}]);
-      setAiMeta(data.ai || {});
-    } catch(err) {
-      setMessages(m => [...m, {role:"assistant", text:`I couldn't reach the HealthSync AI service. ${showError(err)}\n\nMake sure the HealthSync backend is running on port 5000.`}]);
-    } finally { setBusy(""); }
+  const refreshContext=useCallback(async(allowAutoSelect=true)=>{
+    try { applyContext(await roleDataApi.aiContext(),allowAutoSelect); }
+    catch { setError("Authorized patient context could not be refreshed. Please try again."); }
+    finally { setContextLoading(false); }
+  },[applyContext]);
+
+  useEffect(()=>{
+    void Promise.all([roleDataApi.aiStatus().then(setStatus).catch(()=>setStatus(null)),refreshContext()]);
+    const onFocus=()=>void refreshContext(false);
+    window.addEventListener("focus",onFocus);
+    return()=>window.removeEventListener("focus",onFocus);
+  },[refreshContext]);
+
+  useEffect(()=>{
+    if(!professional||!selectedPatientId)return;
+    roleDataApi.aiContext(selectedPatientId).then(context=>{
+      setPatients(context.patients);
+      if(!context.selectedPatient){setSelectedPatientId(null);clearConversation();}
+    }).catch(error=>{
+      if(error instanceof ApiRequestError&&error.status===403){setSelectedPatientId(null);clearConversation();void refreshContext(false);}
+      else setError("The selected patient context could not be verified.");
+    });
+  },[professional,selectedPatientId,clearConversation,refreshContext]);
+
+  useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth",block:"nearest"});},[messages,busy]);
+
+  const appendAssistant=(text:string,ai?:AiMetadata,sources?:AiSource[])=>setMessages(current=>[...current,{id:++messageId.current,role:"assistant",text,ai,sources}]);
+  const friendlyError=(value:unknown)=>value instanceof ApiRequestError&&value.status===401?"Your session has expired. Please sign in again.":value instanceof Error?value.message:"The HealthSync AI service is temporarily unavailable.";
+
+  const handleFailure=async(value:unknown)=>{
+    if(value instanceof ApiRequestError&&value.status===403&&professional){setSelectedPatientId(null);clearConversation();await refreshContext(false);setError("Patient access changed. Select a currently authorized patient to continue.");return;}
+    setError(`${friendlyError(value)} Please retry when ready.`);
   };
 
-  const submit = async (e:FormEvent) => { e.preventDefault(); const text=draft.trim(); if(!text || busy) return; setDraft(""); await ask(text); };
-
-  const run = async (kind:string) => {
-    if (busy) return;
-    if (kind === "symptoms" && !symptoms.trim()) return;
-    setBusy(kind);
-    setToolAnswer("");
-    setInsights([]);
-    setShowAnalysis(true);
-    try {
-      if(kind === "insights") {
-        const d=await roleDataApi.aiInsights();
-        const list=d.insights || [];
-        setInsights(list);
-        setToolAnswer(list.length ? list.map((x,i)=>`${i + 1}. ${x}`).join("\n\n") : (d.message || "No health insights are available yet. Add medications, vitals, appointments or other records first."));
-        setAiMeta(d.ai || {});
-        setToolTitle("AI health insights");
-      } else if(kind === "medication") {
-        const d=await roleDataApi.aiMedicationCoach();
-        setToolAnswer(d.answer || "No medication analysis was returned.");
-        setAiMeta(d.ai || {});
-        setToolTitle("Medication AI analysis");
-      } else if(kind === "vitals") {
-        const d=await roleDataApi.aiVitalsAnalysis();
-        setToolAnswer(d.answer || "No vital trend analysis was returned.");
-        setAiMeta(d.ai || {});
-        setToolTitle("Vital trend AI analysis");
-      } else if(kind === "symptoms") {
-        const d=await roleDataApi.aiSymptomAnalysis(symptoms.trim());
-        setToolAnswer(d.answer || "No symptom analysis was returned.");
-        setAiMeta(d.ai || {});
-        setToolTitle("Symptom support analysis");
-      }
-      requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
-    } catch(err) {
-      setToolTitle("AI connection error");
-      setToolAnswer(`${showError(err)}\n\nCheck that the HealthSync backend is running on http://localhost:5000. Your request was not completed.`);
-      requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
-    } finally {
-      setBusy("");
-    }
+  const ask=async(question:string)=>{
+    if(!question.trim()||busy||!ready)return;
+    setMessages(current=>[...current,{id:++messageId.current,role:"user",text:question.trim()}]);
+    setError("");setBusy("chat");
+    try { const data=await roleDataApi.chat(question.trim(),selectedScope);appendAssistant(data.answer,data.ai,data.sources); }
+    catch(value){await handleFailure(value);}finally{setBusy("");}
   };
 
-  return <div className="space-y-6">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h1 className="font-display text-xl font-semibold text-charcoal-900 sm:text-2xl">AI Health Assistant</h1><p className="mt-1 text-sm text-charcoal-500">AI-powered record analysis, medication support, vital trends and symptom guidance.</p></div>
-      <div className={`rounded-full px-3 py-1.5 text-xs font-semibold ${status?.ollama ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
-        {status?.ollama ? `● Ollama connected · ${status.model}` : "● Local fallback / Ollama unavailable"}
-      </div>
-    </div>
+  const submit=(event:FormEvent)=>{event.preventDefault();const question=draft.trim();if(!question)return;setDraft("");void ask(question);};
 
-    {!status?.ollama && status && <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0"/><div><b>AI model not connected.</b><div className="mt-1">{status.message} Start Ollama and install a local model to get live generated answers.</div></div></div>}
+  const selectPatient=(value:string)=>{
+    const next=value?Number(value):null;
+    if(next===selectedPatientId)return;
+    setSelectedPatientId(next);clearConversation();
+  };
 
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_310px] xl:items-start">
-      <div className="min-w-0 space-y-5">
-        <Card className="overflow-hidden p-0">
-          <div className="flex items-center justify-between gap-3 border-b border-paper-200 bg-paper-50 p-4">
-            <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-ink-100 text-ink-800"><Bot className="h-5 w-5"/></span><div><p className="font-semibold">HealthSync Assistant</p><p className="text-xs text-charcoal-500">Local Ollama AI · role-authorized health data</p></div></div>
-            <span className="hidden rounded-full bg-ink-100 px-2.5 py-1 text-[10px] font-bold text-ink-500 sm:inline-flex">RECORD-GROUNDED</span>
-          </div>
-          <div className="min-h-[230px] max-h-[300px] space-y-4 overflow-y-auto p-4">
-            {messages.map((m,i)=><div key={i} className={`flex ${m.role==="user"?"justify-end":"justify-start"}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed ${m.role==="user"?"bg-ink-800 text-white":"bg-paper-100 text-charcoal-800"}`}>{m.text}</div></div>)}
-            {busy==="chat"&&<div className="text-xs text-charcoal-500">AI is checking authorized health data…</div>}
-          </div>
-          <form onSubmit={submit} className="border-t border-paper-200 p-4"><div className="flex gap-2"><input value={draft} onChange={e=>setDraft(e.target.value)} placeholder="e.g. Give me my medication details or summarize my vitals" className="min-w-0 flex-1 rounded-xl border border-paper-300 bg-paper-0 px-4 py-3 text-sm outline-none focus:border-ink-700"/><button disabled={!!busy||!draft.trim()} className="flex items-center gap-2 rounded-xl bg-ink-800 px-4 py-3 text-xs font-semibold text-white disabled:opacity-50"><Send className="h-4 w-4"/>Ask AI</button></div></form>
-        </Card>
+  const runTool=async(kind:ToolKind)=>{
+    if(busy||!ready||kind==="symptoms"&&!symptoms.trim())return;
+    const labels:Record<ToolKind,string>={insights:"Generate AI Health Insights",medication:"Review medications with AI Coach",vitals:"Review vital trends",symptoms:`Symptom support: ${symptoms.trim()}`};
+    setMessages(current=>[...current,{id:++messageId.current,role:"user",text:labels[kind]}]);
+    setError("");setBusy(kind);
+    try {
+      const data=kind==="insights"?await roleDataApi.aiInsights(selectedScope):kind==="medication"?await roleDataApi.aiMedicationCoach(selectedScope):kind==="vitals"?await roleDataApi.aiVitalsAnalysis(selectedScope):await roleDataApi.aiSymptomAnalysis(symptoms.trim(),selectedScope);
+      appendAssistant(data.answer,data.ai,data.sources);
+      if(kind==="symptoms")setSymptoms("");
+    } catch(value){await handleFailure(value);}finally{setBusy("");}
+  };
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card className="p-4"><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-ink-700"/><div><p className="font-semibold">AI Health Insights</p><p className="text-xs text-charcoal-500">Summarizes authorized records.</p></div></div><button type="button" onClick={()=>void run("insights")} disabled={!!busy} className="mt-4 w-full rounded-xl bg-ink-800 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-50">{busy==="insights"?"Analyzing…":"Generate insights"}</button></Card>
-          <Card className="p-4"><div className="flex items-center gap-3"><Pill className="h-5 w-5 text-ink-700"/><div><p className="font-semibold">Medication AI Coach</p><p className="text-xs text-charcoal-500">Adherence, missed doses and stock.</p></div></div><button type="button" onClick={()=>void run("medication")} disabled={!!busy} className="mt-4 w-full rounded-xl bg-ink-800 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-50">{busy==="medication"?"Analyzing…":"Analyze medications"}</button></Card>
-          <Card className="p-4"><div className="flex items-center gap-3"><Activity className="h-5 w-5 text-ink-700"/><div><p className="font-semibold">Vital Trend AI</p><p className="text-xs text-charcoal-500">Finds patterns in recorded vitals.</p></div></div><button type="button" onClick={()=>void run("vitals")} disabled={!!busy} className="mt-4 w-full rounded-xl bg-ink-800 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-50">{busy==="vitals"?"Analyzing…":"Analyze vitals"}</button></Card>
+  const suggested=useMemo(()=>prompts[role], [role]);
+  const copy=roleCopy[role];
+
+  return <div className="space-y-4">
+    <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-ink-700"><Brain className="h-4 w-4"/>Clinical intelligence</div><h1 className="mt-2 font-display text-2xl font-semibold text-charcoal-900 sm:text-3xl">HealthSync AI</h1><p className="mt-1 text-sm text-charcoal-500">Record-grounded assistance based on authorized HealthSync data.</p><p className="mt-1 text-xs text-charcoal-500">{copy.subtitle}</p></div>
+      <div className={`inline-flex w-fit items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${status?.ollama?"border-sage-200 bg-sage-50 text-sage-800":"border-paper-300 bg-paper-50 text-charcoal-700"}`}><span className={`h-2 w-2 rounded-full ${status?.ollama?"bg-sage-600":status?"bg-amber-500":"bg-charcoal-400"}`}/><span>{status?.ollama?"Local AI connected":status?"Local fallback":"Checking Local AI"}</span>{status?.ollama&&status.model&&<span className="font-normal opacity-75">· {status.model}</span>}</div>
+    </header>
+
+    <Card className="p-3.5 sm:p-4">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div><div className="flex items-center gap-2"><UserRound className="h-4 w-4 text-ink-700"/><h2 className="text-sm font-semibold text-charcoal-900">AI patient context</h2></div>
+          {role==="patient"?<p className="mt-1 text-xs text-charcoal-500">Using your authorized HealthSync records</p>:<div className="mt-2 max-w-md"><label htmlFor="ai-patient" className="mb-1.5 block text-xs font-medium text-charcoal-600">Select an authorized patient</label><div className="relative"><select id="ai-patient" value={selectedPatientId||""} onChange={event=>selectPatient(event.target.value)} disabled={contextLoading||busy!==""} className="w-full appearance-none rounded-xl border border-paper-300 bg-paper-0 px-3 py-2.5 pr-9 text-sm font-semibold text-charcoal-900 outline-none transition focus:border-ink-700 focus:ring-2 focus:ring-ink-700/10 disabled:opacity-60"><option value="">Select patient</option>{patients.map(patient=><option key={patient.id} value={patient.id}>{patient.name} — {accessLabel(patient.accessType)}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-charcoal-500"/></div></div>}
+          {professional&&!contextLoading&&!patients.length&&<p className="mt-2 text-xs text-charcoal-500">{role==="doctor"?"No patients are currently available for AI review.":"No connected patients are currently available."}</p>}
         </div>
-
-        {insights.length>0 && <Card className="p-5"><h2 className="flex items-center gap-2 font-semibold"><Brain className="h-5 w-5"/> AI-generated health insights</h2><ul className="mt-3 space-y-2 text-sm text-charcoal-700">{insights.map((x,i)=><li key={i} className="rounded-xl bg-paper-50 p-3">{x}</li>)}</ul></Card>}
-
-        {toolAnswer && <div ref={resultRef}><Card className="overflow-hidden p-0"><button type="button" onClick={()=>setShowAnalysis(v=>!v)} className="flex w-full items-center justify-between p-5 text-left hover:bg-paper-50"><div><h2 className="font-semibold">{toolTitle}</h2><p className="mt-1 text-xs text-charcoal-500">{aiMeta.live ? `Generated by local Ollama · ${aiMeta.model}` : aiMeta.grounded ? "Grounded in authorized HealthSync records" : "Generated using HealthSync's local safe fallback"}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-paper-100 text-charcoal-700">{showAnalysis?<ChevronUp className="h-5 w-5"/>:<ChevronDown className="h-5 w-5"/>}</span></button>{showAnalysis && <div className="border-t border-paper-200 p-5"><p className="whitespace-pre-wrap text-sm leading-relaxed text-charcoal-700">{toolAnswer}</p></div>}</Card></div>}
-
-        <Card className="p-5"><h2 className="flex items-center gap-2 font-semibold"><ShieldCheck className="h-5 w-5"/> Symptom support</h2><p className="mt-1 text-xs text-charcoal-500">Informational only — not a diagnosis or prescription.</p><div className="mt-3 flex gap-2"><input value={symptoms} onChange={e=>setSymptoms(e.target.value)} placeholder="e.g. headache since yesterday with mild nausea" className="min-w-0 flex-1 rounded-xl border border-paper-300 bg-paper-0 px-4 py-3 text-sm outline-none focus:border-ink-700"/><button type="button" onClick={()=>void run("symptoms")} disabled={!!busy||!symptoms.trim()} className="rounded-xl bg-ink-800 px-4 py-3 text-xs font-semibold text-white disabled:opacity-50">{busy==="symptoms"?"Analyzing…":"Analyze"}</button></div></Card>
+        {professional&&activePatient&&<div className="flex flex-wrap items-center gap-2 lg:justify-end"><span className="text-xs text-charcoal-500">Reviewing</span><strong className="text-sm text-charcoal-900">{activePatient.name}</strong><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${activePatient.accessType==="EMERGENCY"?"bg-amber-100 text-amber-900":"bg-paper-100 text-charcoal-600"}`}>{accessLabel(activePatient.accessType)}</span></div>}
       </div>
+      {!status?.ollama&&status&&<div className="mt-3 flex items-start gap-2 rounded-lg bg-paper-50 px-3 py-2 text-xs text-charcoal-600"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600"/><span>Live local generation is unavailable. Supported record lookups and safe fallback responses remain available.</span></div>}
+    </Card>
 
-      <aside className="space-y-4 xl:sticky xl:top-5">
-        <Card className="overflow-hidden p-0">
-          <div className="border-b border-paper-200 bg-paper-50 p-4"><div className="flex items-center gap-2"><UserRound className="h-4 w-4 text-ink-700"/><h2 className="font-semibold">Patient overview</h2></div><p className="mt-1 text-[11px] text-charcoal-500">Authorized data available to this workspace</p></div>
-          <div className="p-4">
-            {patients.length>1 && <select value={selectedPatient} onChange={e=>setSelectedPatient(Number(e.target.value))} className="mb-3 w-full rounded-xl border border-paper-300 bg-paper-0 px-3 py-2 text-xs font-semibold outline-none">{patients.map((p,i)=><option key={p.patient.id} value={i}>{p.patient.name}</option>)}</select>}
-            {activePatient ? <>
-              <div className="rounded-xl border border-paper-200 bg-paper-50 p-3"><p className="font-semibold">{activePatient.patient.name}</p><p className="mt-0.5 text-[11px] text-charcoal-500">Patient {activePatient.patient.patientCode}</p><div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-lg bg-paper-0 p-2.5"><p className="text-[10px] text-charcoal-500">Adherence</p><p className="mt-0.5 text-lg font-bold">{activePatient.adherenceRate}%</p></div><div className="rounded-lg bg-paper-0 p-2.5"><p className="text-[10px] text-charcoal-500">Open alerts</p><p className="mt-0.5 text-lg font-bold">{openAlerts.length}</p></div></div></div>
+    <Card className="overflow-hidden p-0">
+      <div className="flex items-center justify-between gap-3 border-b border-paper-200 bg-paper-50 px-4 py-3.5 sm:px-5"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-ink-800 text-white"><Bot className="h-4 w-4"/></span><div><p className="text-sm font-semibold text-charcoal-900">Authorized record assistant</p><p className="text-[11px] text-charcoal-500">Session-only · conversation is not saved</p></div></div>{ready&&<span className="hidden items-center gap-1.5 text-[10px] font-semibold text-sage-700 sm:flex"><CheckCircle2 className="h-3.5 w-3.5"/>Context ready</span>}</div>
+      <div className="min-h-[190px] max-h-[430px] overflow-y-auto bg-paper-100 p-4 shadow-inner sm:p-5" aria-live="polite">
+        {!messages.length&&!busy&&<div className="mx-auto flex min-h-[160px] max-w-lg flex-col items-center justify-center text-center"><span className="flex h-10 w-10 items-center justify-center rounded-xl border border-ink-700/15 bg-ink-100 text-ink-700"><Brain className="h-5 w-5"/></span><h2 className="mt-3 font-display text-base font-semibold text-charcoal-900">How can HealthSync AI help?</h2><p className="mt-1.5 text-sm leading-relaxed text-charcoal-500">{copy.empty}</p>{!ready&&<p className="mt-2.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">Select a patient to begin an authorized review.</p>}</div>}
+        <div className="space-y-3">{messages.map(message=><div key={message.id} className={`flex ${message.role==="user"?"justify-end":"justify-start"}`}><div className={`max-w-[90%] sm:max-w-[80%] ${message.role==="user"?"rounded-2xl rounded-br-md bg-ink-800 px-4 py-2.5 text-white":"rounded-2xl rounded-bl-md border border-[#d8e4df] bg-[#f7faf9] px-4 py-2.5 text-[#17252d] shadow-sm"}`}><p className="whitespace-pre-wrap text-sm leading-relaxed">{message.text}</p>{message.role==="assistant"&&<><SourceChips sources={message.sources}/>{message.ai&&<div className={`mt-2 flex items-center gap-1.5 text-[10px] font-semibold ${message.ai.mode==="urgent"?"text-[#9f3027]":message.ai.mode==="safety"?"text-[#7a4c0b]":"text-[#53646d]"}`}>{message.ai.mode==="urgent"&&<AlertTriangle className="h-3.5 w-3.5"/>}{modeLabel(message.ai)}{message.ai.live&&message.ai.model&&<span className="font-normal">· Local AI</span>}</div>}</>}</div></div>)}
+          {busy&&<div className="flex justify-start"><div className="rounded-2xl rounded-bl-md border border-[#d8e4df] bg-[#f7faf9] px-4 py-2.5 text-sm text-[#53646d] shadow-sm"><span className="inline-flex items-center gap-2"><span className="flex gap-1" aria-hidden="true"><i className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-500"/><i className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-500 [animation-delay:150ms]"/><i className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-500 [animation-delay:300ms]"/></span>Reviewing authorized context…</span></div></div>}
+          <div ref={endRef}/></div>
+      </div>
+      <div className="border-t border-paper-200 bg-paper-0 p-3.5 sm:p-4">
+        {error&&<div className="mb-3 flex items-start gap-2 rounded-xl border border-brick-600/20 bg-brick-50 px-3 py-2.5 text-xs text-brick-800" role="alert"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0"/><span>{error}</span></div>}
+        <div className="mb-2.5 flex flex-wrap gap-1.5">{suggested.map(prompt=><button key={prompt} type="button" onClick={()=>void ask(prompt)} disabled={!ready||busy!==""} className="rounded-full border border-paper-300 bg-paper-50 px-2.5 py-1.5 text-[10px] font-medium text-charcoal-700 transition hover:border-ink-500 hover:bg-ink-100 focus:outline-none focus:ring-2 focus:ring-ink-700/20 disabled:cursor-not-allowed disabled:opacity-50">{prompt}</button>)}</div>
+        <form onSubmit={submit}><label htmlFor="ai-question" className="sr-only">Ask HealthSync AI</label><div className="flex flex-col gap-2 sm:flex-row"><textarea id="ai-question" rows={1} value={draft} onChange={event=>setDraft(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();event.currentTarget.form?.requestSubmit();}}} disabled={!ready||busy!==""} placeholder={ready?"Ask about authorized HealthSync records or general health information…":"Select a patient to enable HealthSync AI"} className="min-h-[46px] max-h-24 min-w-0 flex-1 resize-y rounded-xl border border-paper-300 bg-paper-0 px-4 py-3 text-sm outline-none transition focus:border-ink-700 focus:ring-2 focus:ring-ink-700/10 disabled:bg-paper-50 disabled:opacity-70"/><button disabled={!ready||busy!==""||!draft.trim()} className="flex items-center justify-center gap-2 rounded-xl bg-ink-800 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-ink-700 focus:outline-none focus:ring-2 focus:ring-ink-700/30 disabled:cursor-not-allowed disabled:opacity-50"><Send className="h-4 w-4"/>Ask AI</button></div></form>
+        <p className="mt-2 flex items-start gap-1.5 text-[10px] leading-relaxed text-charcoal-500"><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0"/>{copy.safety}</p>
+      </div>
+    </Card>
 
-              <div className="mt-4"><p className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-charcoal-500"><HeartPulse className="h-3.5 w-3.5"/> Latest vitals</p>{vital ? <div className="grid grid-cols-3 gap-2"><div className="rounded-lg border border-paper-200 p-2"><p className="text-[9px] text-charcoal-500">HR</p><p className="font-semibold">{vitalLabel(vital.heartRate," bpm")}</p></div><div className="rounded-lg border border-paper-200 p-2"><p className="text-[9px] text-charcoal-500">BP</p><p className="font-semibold">{vitalLabel(vital.systolic)}/{vitalLabel(vital.diastolic)}</p></div><div className="rounded-lg border border-paper-200 p-2"><p className="text-[9px] text-charcoal-500">Glucose</p><p className="font-semibold">{vitalLabel(vital.glucose)}</p></div></div> : <p className="text-xs text-charcoal-500">No vital readings recorded.</p>}</div>
+    <section aria-labelledby="ai-tools-title"><div className="mb-3"><h2 id="ai-tools-title" className="font-display text-lg font-semibold text-charcoal-900">AI record tools</h2><p className="mt-0.5 text-xs text-charcoal-500">Focused analysis uses the same authorized patient context and appears in the conversation above.</p></div><div className="grid gap-3 md:grid-cols-3">{toolCards.map(tool=>{const Icon=tool.icon;return <Card key={tool.kind} className="flex h-full flex-col p-4 transition hover:border-ink-700/30 hover:shadow-md"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-ink-100 text-ink-700"><Icon className="h-4 w-4"/></span><h3 className="mt-3 text-sm font-semibold text-charcoal-900">{tool.title}</h3><p className="mt-1 flex-1 text-xs leading-relaxed text-charcoal-500">{tool.description}</p><button type="button" onClick={()=>void runTool(tool.kind)} disabled={!ready||busy!==""} className="mt-4 rounded-xl border border-ink-700/20 bg-ink-100 px-3 py-2.5 text-xs font-semibold text-ink-800 transition hover:bg-ink-200 focus:outline-none focus:ring-2 focus:ring-ink-700/20 disabled:cursor-not-allowed disabled:opacity-50">{busy===tool.kind?"Reviewing…":tool.button}</button></Card>})}</div></section>
 
-              <div className="mt-4"><p className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-charcoal-500"><Pill className="h-3.5 w-3.5"/> Medications</p>{activePatient.medications?.length ? <div className="space-y-2">{activePatient.medications.slice(0,4).map(m=><div key={m.id} className="rounded-lg border border-paper-200 p-2.5"><p className="text-xs font-semibold">{m.name}</p><p className="mt-0.5 text-[10px] text-charcoal-500">{m.dosage} · {m.schedule}</p><p className="mt-1 text-[10px] text-charcoal-500">Stock: {m.stock}</p></div>)}</div> : <p className="text-xs text-charcoal-500">No medications recorded.</p>}</div>
-            </> : <div className="py-6 text-center text-xs text-charcoal-500">No authorized patient record is available.</div>}
-          </div>
-        </Card>
-
-        <Card className="p-4"><div className="flex items-center gap-2"><BellRing className="h-4 w-4 text-ink-700"/><h2 className="font-semibold">Care escalation</h2></div><p className="mt-1 text-[11px] text-charcoal-500">The buzzer is used for abnormal care events.</p><div className="mt-3 rounded-xl border border-ink-700/20 bg-ink-100 p-3"><div className="flex items-center gap-2 text-xs font-semibold text-ink-500"><span className="h-2 w-2 rounded-full bg-ink-600"/> Monitoring active</div><p className="mt-2 text-[10px] leading-relaxed text-ink-500">Patient abnormal vitals → caregiver + physician. Caregiver observation → physician.</p></div></Card>
-
-        <Card className="p-4"><div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-ink-700"/><h2 className="font-semibold">Upcoming appointments</h2></div><div className="mt-3 space-y-2">{activePatient?.appointments?.slice(0,3).map(a=><div key={a.id} className="rounded-lg border border-paper-200 p-2.5"><p className="text-xs font-semibold">{a.title}</p><p className="mt-0.5 text-[10px] text-charcoal-500">{a.date} · {a.time} · {a.status}</p></div>)}{!activePatient?.appointments?.length && <p className="text-xs text-charcoal-500">No appointments recorded.</p>}</div></Card>
-
-        {openAlerts.length>0 && <Card className="p-4"><div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-600"/><h2 className="font-semibold">Recent alerts</h2></div><div className="mt-3 space-y-2">{openAlerts.map(a=><div key={a.id} className="rounded-lg border border-amber-200 bg-amber-50 p-2.5"><p className="text-[10px] font-bold text-amber-900">{a.severity}</p><p className="mt-0.5 text-xs text-amber-900">{a.message}</p></div>)}</div></Card>}
-      </aside>
-    </div>
+    <Card className="p-4"><div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end"><div><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-ink-700"/><h2 className="text-sm font-semibold text-charcoal-900">Symptom support</h2></div><p className="mt-1 text-xs text-charcoal-500">Organize symptoms and receive general guidance. This does not provide a diagnosis or trigger Emergency SOS.</p><label htmlFor="ai-symptoms" className="sr-only">Describe symptoms</label><input id="ai-symptoms" value={symptoms} onChange={event=>setSymptoms(event.target.value)} disabled={!ready||busy!==""} placeholder="Describe symptoms, timing and severity" className="mt-3 w-full rounded-xl border border-paper-300 bg-paper-0 px-4 py-2.5 text-sm outline-none focus:border-ink-700 focus:ring-2 focus:ring-ink-700/10 disabled:bg-paper-50 disabled:opacity-70"/></div><button type="button" onClick={()=>void runTool("symptoms")} disabled={!ready||busy!==""||!symptoms.trim()} className="rounded-xl bg-ink-800 px-5 py-2.5 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-ink-700/30 disabled:cursor-not-allowed disabled:opacity-50">{busy==="symptoms"?"Reviewing…":"Get symptom support"}</button></div></Card>
   </div>;
 }

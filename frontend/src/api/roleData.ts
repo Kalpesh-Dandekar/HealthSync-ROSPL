@@ -1,11 +1,20 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 function token(){ return localStorage.getItem("healthsync_token") || ""; }
+export class ApiRequestError extends Error { constructor(message:string, public status:number){ super(message); } }
 async function request<T>(path:string, options:RequestInit={}):Promise<T>{
   const response=await fetch(`${API_URL}${path}`,{...options,headers:{"Content-Type":"application/json",...(token()?{Authorization:`Bearer ${token()}`}:{}) ,...(options.headers||{})}});
   const data=await response.json().catch(()=>({}));
-  if(!response.ok) throw new Error(data.message||"Request failed.");
+  if(!response.ok) throw new ApiRequestError(data.message||"Request failed.",response.status);
   return data as T;
 }
+export type AiRole = "patient"|"doctor"|"caregiver";
+export type AiAccessType = "SELF"|"CARE_NETWORK"|"EMERGENCY";
+export interface AiPatientChoice { id:number; name:string; accessType:AiAccessType; }
+export interface AiSource { type:string; label:string; count:number; includedCount:number; }
+export interface AiMetadata { provider:string; model:string|null; live:boolean; grounded:boolean; mode:"record"|"general"|"safety"|"urgent"|"fallback"; }
+export interface AiResponse { answer:string; ai:AiMetadata; sources:AiSource[]; }
+export interface AiContextResponse { role:AiRole; patients:AiPatientChoice[]; selectedPatient:AiPatientChoice|null; }
+export interface AiInsightsResponse extends AiResponse { insights:string[]; message?:string; }
 export interface CareTeamMember { id:number; name:string; email:string; role:"patient"|"caregiver"|"doctor"; }
 export interface PatientBundle { patient:any; medications:any[]; vitals:any[]; alerts:any[]; appointments:any[]; clinicalRecords?:import("./clinicalRecordApi").ClinicalRecord[]; careTeam?:CareTeamMember[]; adherenceRate:number; }
 export interface ReportRecord { id:string; patientId:number; patientName:string; title:string; category:"adherence"|"vitals"|"consultation"|"lab"|"clinical"; generatedOn:string; authoredBy:string; summary:string; }
@@ -29,13 +38,13 @@ export const roleDataApi={
  getAppointments:()=>request<{appointments:any[]}>("/role/appointments"),
  optimizeAppointments:(data:any)=>request<{engine:string;suggestions:any[];criteria:any}>("/appointments/optimize",{method:"POST",body:JSON.stringify(data)}),
  sendSos:(active:boolean)=>request<{active:boolean}>("/sos",{method:"POST",body:JSON.stringify({active})}),
- chat:(message:string)=>request<{answer:string;ai?:any}>("/ai/chat",{method:"POST",body:JSON.stringify({message})}),
+ chat:(message:string,patientId?:number)=>request<AiResponse>("/ai/chat",{method:"POST",body:JSON.stringify({message,...(patientId?{patientId}:{})})}),
  aiStatus:()=>request<{backend:boolean;ollama:boolean;model:string|null;configuredModel:string;message:string}>("/ai/status"),
- aiContext:()=>request<{role:string;patients:PatientBundle[]}>("/ai/context"),
- aiInsights:()=>request<{insights:string[];message?:string;ai?:any}>("/ai/insights"),
- aiMedicationCoach:()=>request<{answer:string;ai?:any}>("/ai/medication-coach"),
- aiVitalsAnalysis:()=>request<{answer:string;ai?:any}>("/ai/vitals-analysis"),
- aiSymptomAnalysis:(symptoms:string)=>request<{answer:string;ai?:any}>("/ai/symptom-analysis",{method:"POST",body:JSON.stringify({symptoms})}),
+ aiContext:(patientId?:number)=>request<AiContextResponse>(`/ai/context${patientId?`?patientId=${patientId}`:""}`),
+ aiInsights:(patientId?:number)=>request<AiInsightsResponse>("/ai/insights",{method:"POST",body:JSON.stringify(patientId?{patientId}:{})}),
+ aiMedicationCoach:(patientId?:number)=>request<AiResponse>("/ai/medication-coach",{method:"POST",body:JSON.stringify(patientId?{patientId}:{})}),
+ aiVitalsAnalysis:(patientId?:number)=>request<AiResponse>("/ai/vitals-analysis",{method:"POST",body:JSON.stringify(patientId?{patientId}:{})}),
+ aiSymptomAnalysis:(symptoms:string,patientId?:number)=>request<AiResponse>("/ai/symptom-analysis",{method:"POST",body:JSON.stringify({symptoms,...(patientId?{patientId}:{})})}),
  getCareNetwork:()=>request<{connections:any[]}>("/care-network"),
  getReports:()=>request<{reports:ReportRecord[]}>("/reports"),
  getEmergencies:()=>request<{emergencies:EmergencyRecord[]}>("/emergencies"),

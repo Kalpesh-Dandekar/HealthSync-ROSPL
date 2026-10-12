@@ -42,7 +42,7 @@
 .app-shell--doctor .app-shell__main .font-display { font-family: var(--font-body); letter-spacing: -.025em; }
 .app-shell--doctor .app-shell__main .text-charcoal-900, .app-shell--doctor .app-shell__main .text-charcoal-800 { color: #19333b; }
 .app-shell--doctor .app-shell__main .text-charcoal-700, .app-shell--doctor .app-shell__main .text-charcoal-600 { color: #4b646b; }
-.app-shell--doctor .app-shell__main .text-charcoal-500 { color: #667c82; }
+.app-shell--doctor .app-shell__main .text-charcoal-500 { color: #5d7278; }
 .app-shell--doctor .app-shell__main .text-ink-500, .app-shell--doctor .app-shell__main .text-ink-600, .app-shell--doctor .app-shell__main .text-ink-700, .app-shell--doctor .app-shell__main .text-ink-800 { color: #16777a; }
 .app-shell--doctor .app-shell__main .bg-paper-0 { color: #19333b; background-color: #f8fbfc; }
 .app-shell--doctor .app-shell__main .bg-paper-50 { background-color: #eef4f5; }
@@ -54,7 +54,7 @@
 .app-shell--doctor .app-shell__main .bg-ink-800:hover { background-color: #0e6266; }
 .app-shell--doctor .app-shell__main .rounded-2xl.border.border-paper-200.bg-paper-0 { border-color: #d1e0e3; background: #f8fbfc; box-shadow: 0 12px 32px rgba(31, 67, 77, .065), inset 0 1px rgba(255,255,255,.84); }
 .app-shell--doctor .app-shell__main input, .app-shell--doctor .app-shell__main select, .app-shell--doctor .app-shell__main textarea { color: #1a343c; border-color: #c6d8dc; background: #fbfdfe; color-scheme: light; box-shadow: inset 0 1px 2px rgba(31,67,77,.035); }
-.app-shell--doctor .app-shell__main input::placeholder, .app-shell--doctor .app-shell__main textarea::placeholder { color: #819399; }
+.app-shell--doctor .app-shell__main input::placeholder, .app-shell--doctor .app-shell__main textarea::placeholder { color: #61757a; }
 .app-shell--doctor .app-shell__main input:focus, .app-shell--doctor .app-shell__main select:focus, .app-shell--doctor .app-shell__main textarea:focus { border-color: #3d999c; box-shadow: 0 0 0 3px rgba(42, 145, 148, .09); }
 .app-shell--doctor .app-shell__main input[type="checkbox"] { accent-color: #177f82; }
 

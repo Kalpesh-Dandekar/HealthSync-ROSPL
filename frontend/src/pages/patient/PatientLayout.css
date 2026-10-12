@@ -100,7 +100,7 @@
 .app-shell--patient .app-shell__main .text-charcoal-800 { color: #19342a; }
 .app-shell--patient .app-shell__main .text-charcoal-700,
 .app-shell--patient .app-shell__main .text-charcoal-600 { color: #4e655b; }
-.app-shell--patient .app-shell__main .text-charcoal-500 { color: #687b72; }
+.app-shell--patient .app-shell__main .text-charcoal-500 { color: #5f7168; }
 .app-shell--patient .app-shell__main .text-ink-500,
 .app-shell--patient .app-shell__main .text-ink-600,
 .app-shell--patient .app-shell__main .text-ink-700,
@@ -135,7 +135,7 @@
   color-scheme: light;
 }
 .app-shell--patient .app-shell__main input::placeholder,
-.app-shell--patient .app-shell__main textarea::placeholder { color: #83928b; }
+.app-shell--patient .app-shell__main textarea::placeholder { color: #66776f; }
 .app-shell--patient .app-shell__main input:focus,
 .app-shell--patient .app-shell__main select:focus,
 .app-shell--patient .app-shell__main textarea:focus {
@@ -168,7 +168,7 @@
   box-shadow: 0 12px 30px rgba(38, 73, 57, .055) !important;
 }
 .patient-vitals .recharts-cartesian-grid line { stroke: #dce7e1; }
-.patient-vitals .recharts-text { fill: #667a70; }
+.patient-vitals .recharts-text { fill: #5d7066; }
 .vitals-chart-empty {
   position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
   color: #73867c; font-size: .66rem; font-weight: 650; letter-spacing: .02em;

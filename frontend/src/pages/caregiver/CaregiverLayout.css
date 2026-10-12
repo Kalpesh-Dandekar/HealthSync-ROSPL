@@ -37,7 +37,7 @@
 .app-shell--caregiver .app-shell__main .font-display { font-family:var(--font-body); letter-spacing:-.025em; }
 .app-shell--caregiver .app-shell__main .text-charcoal-900,.app-shell--caregiver .app-shell__main .text-charcoal-800 { color:#19363a; }
 .app-shell--caregiver .app-shell__main .text-charcoal-700,.app-shell--caregiver .app-shell__main .text-charcoal-600 { color:#4e6769; }
-.app-shell--caregiver .app-shell__main .text-charcoal-500 { color:#687e7f; }
+.app-shell--caregiver .app-shell__main .text-charcoal-500 { color:#5e7475; }
 .app-shell--caregiver .app-shell__main .text-ink-500,.app-shell--caregiver .app-shell__main .text-ink-600,.app-shell--caregiver .app-shell__main .text-ink-700,.app-shell--caregiver .app-shell__main .text-ink-800 { color:#237e74; }
 .app-shell--caregiver .app-shell__main .bg-paper-0 { color:#19363a; background-color:#fafcfb; }
 .app-shell--caregiver .app-shell__main .bg-paper-50 { background-color:#eef5f2; }
@@ -49,7 +49,7 @@
 .app-shell--caregiver .app-shell__main .bg-ink-800:hover { background-color:#176d61; }
 .app-shell--caregiver .app-shell__main .rounded-2xl.border.border-paper-200.bg-paper-0 { border-color:#d1e1dd; background:#fafcfb; box-shadow:0 12px 32px rgba(31,72,67,.06),inset 0 1px rgba(255,255,255,.85); }
 .app-shell--caregiver .app-shell__main input,.app-shell--caregiver .app-shell__main select,.app-shell--caregiver .app-shell__main textarea { color:#1a373a; border-color:#c7dad5; background:#fbfdfc; color-scheme:light; box-shadow:inset 0 1px 2px rgba(31,72,67,.035); }
-.app-shell--caregiver .app-shell__main input::placeholder,.app-shell--caregiver .app-shell__main textarea::placeholder { color:#829491; }
+.app-shell--caregiver .app-shell__main input::placeholder,.app-shell--caregiver .app-shell__main textarea::placeholder { color:#627675; }
 .app-shell--caregiver .app-shell__main input:focus,.app-shell--caregiver .app-shell__main select:focus,.app-shell--caregiver .app-shell__main textarea:focus { border-color:#44a18e; box-shadow:0 0 0 3px rgba(54,160,137,.09); }
 .app-shell--caregiver .app-shell__main input[type="checkbox"] { accent-color:#218474; }
 
