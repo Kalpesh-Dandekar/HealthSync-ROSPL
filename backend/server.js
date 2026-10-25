@@ -8,6 +8,8 @@ import jwt from "jsonwebtoken";
 import { PrismaClient } from "./generated/prisma/client.ts";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Server } from "socket.io";
+import { localDayBounds, scheduleOccurrencesForDay } from "./medicationSchedule.js";
+import { buildGroundedAdherenceAnswer, classifyMedicationRecordIntent } from "./aiMedicationGrounding.js";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is missing in backend/.env");
@@ -20,6 +22,10 @@ const PORT = Number(process.env.PORT || 5000);
 const JWT_SECRET = process.env.JWT_SECRET?.trim();
 if (!JWT_SECRET) throw new Error("JWT_SECRET is required in backend/.env");
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5175";
+const configuredGraceMinutes = Number(process.env.MISSED_DOSE_GRACE_MINUTES ?? 2);
+const MISSED_DOSE_GRACE_MINUTES = Number.isFinite(configuredGraceMinutes) && configuredGraceMinutes >= 0 ? configuredGraceMinutes : 2;
+const MISSED_DOSE_GRACE_MS = MISSED_DOSE_GRACE_MINUTES * 60_000;
+const MEDICATION_RECONCILE_INTERVAL_MS = 30_000;
 const allowedOrigins = new Set([
   CLIENT_ORIGIN,
   "http://localhost:5173",
@@ -259,6 +265,65 @@ function emitToRole(role, event, payload) {
   });
 }
 
+async function medicationUpdateRecipients(patientId) {
+  const connections = await prisma.careConnection.findMany({
+    where: { patientId, caregiverId: { not: null } },
+    select: { caregiverId: true },
+  });
+  return [...new Set([patientId, ...connections.map(connection => connection.caregiverId).filter(Boolean)])];
+}
+
+async function emitMedicationUpdate(patientId, medicationId, log, alert = null) {
+  const recipients = await medicationUpdateRecipients(patientId);
+  for (const recipient of recipients) {
+    emitToUser(recipient, "medication:updated", { patientId, medicationId, log });
+    if (alert) emitToUser(recipient, "alert:created", alert);
+  }
+}
+
+let medicationReconciliationRunning = false;
+
+async function reconcileMissedMedicationDoses(now = new Date()) {
+  if (medicationReconciliationRunning) return;
+  medicationReconciliationRunning = true;
+  try {
+    const { start, end } = localDayBounds(now);
+    // Demo-safe scope: only medications created today are automatically reconciled.
+    // This prevents old seeded plans from producing a burst of misses after restart.
+    const medications = await prisma.medication.findMany({
+      where: { createdAt: { gte: start, lt: end } },
+      select: { id: true, userId: true, name: true, schedule: true, createdAt: true },
+    });
+
+    for (const medication of medications) {
+      const medicationCreatedMinute = new Date(medication.createdAt);
+      medicationCreatedMinute.setSeconds(0, 0);
+      const occurrences = scheduleOccurrencesForDay(medication.schedule, now).filter(occurrence =>
+        occurrence.getTime() >= medicationCreatedMinute.getTime() &&
+        now.getTime() > occurrence.getTime() + MISSED_DOSE_GRACE_MS
+      );
+      for (const scheduledAt of occurrences) {
+        const lockKey = Math.floor(scheduledAt.getTime() / 60_000);
+        const result = await prisma.$transaction(async tx => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(${medication.id}, ${lockKey})`;
+          const existing = await tx.medicationLog.findFirst({ where: { medicationId: medication.id, scheduledAt } });
+          if (existing) return null;
+          const log = await tx.medicationLog.create({
+            data: { medicationId: medication.id, userId: medication.userId, status: "MISSED", scheduledAt, takenAt: null },
+          });
+          const alert = await tx.alert.create({
+            data: { userId: medication.userId, type: "missed_dose", message: `${medication.name} was automatically marked missed after its scheduled time.`, severity: "WARNING" },
+          });
+          return { log, alert };
+        });
+        if (result) await emitMedicationUpdate(medication.userId, medication.id, result.log, result.alert);
+      }
+    }
+  } finally {
+    medicationReconciliationRunning = false;
+  }
+}
+
 const emergencyInclude = {
   patient: { select: { id: true, name: true, medications: { select: { name: true, dosage: true, schedule: true } }, vitals: { orderBy: { recordedAt: "desc" }, take: 1 }, patientConnections: { include: { caregiver: { select: { id: true, name: true, role: true } }, physician: { select: { id: true, name: true, role: true } } } }, patientClinicalRecords: { select: { title: true, status: true, clinicalDate: true }, orderBy: { clinicalDate: "desc" }, take: 1 } } },
   triggeredBy: { select: { id: true, name: true, role: true } },
@@ -469,10 +534,10 @@ app.post("/api/caregiver/patients/:id/medications/:medicationId/log", auth, asyn
       takenAt: status === "TAKEN" ? new Date() : null,
     },
   });
-  if (status === "MISSED") {
-    await prisma.alert.create({ data: { userId: patientId, type: "missed_dose", message: `${medication.name} was marked missed by caregiver ${req.user.name}.`, severity: "WARNING" } });
-  }
-  emitToUser(patientId, "medication:updated", { patientId, medicationId, log });
+  const alert = status === "MISSED"
+    ? await prisma.alert.create({ data: { userId: patientId, type: "missed_dose", message: `${medication.name} was marked missed by caregiver ${req.user.name}.`, severity: "WARNING" } })
+    : null;
+  await emitMedicationUpdate(patientId, medicationId, log, alert);
   res.status(201).json({ log });
 });
 
@@ -961,8 +1026,8 @@ function classifyAiQuestion(message) {
   if (/\b(stop|start|increase|decrease|double|change|replace|switch)\b.{0,35}\b(medications?|medicines?|drugs?|doses?|dosage|prescriptions?|pills?)\b|\b(medications?|medicines?|drugs?|doses?|dosage|prescriptions?|pills?)\b.{0,35}\b(stop|start|increase|decrease|double|change|replace|switch)\b/.test(lower)) return { intent: "medication_change", mode: "safety" };
   if (/\b(diagnose|diagnosis|what disease|what condition|do i have|does (?:this|the patient) have)\b/.test(lower)) return { intent: "diagnosis", mode: "safety" };
   if (/\bwhat (?:does|is|are)\b|\bwhy (?:is|does|are)\b|\bnormal (?:range|resting|level)\b|\bexplain (?:what|why)\b/.test(lower) && !/\b(my|mine|record|patient|recent|latest)\b/.test(lower)) return { intent: "general", mode: "general" };
-  if (/\b(medication|medications|medicine|medicines|drug|drugs|tablet|tablets|pill|pills)\b/.test(lower)) return { intent: "medications", mode: "record" };
-  if (/\b(adherence|missed dose|missed doses|pending dose|dose history)\b/.test(lower)) return { intent: "adherence", mode: "record" };
+  const medicationIntent = classifyMedicationRecordIntent(lower);
+  if (medicationIntent) return { intent: medicationIntent, mode: "record" };
   if (/\b(clinical record|clinical records|consultation record|medical record|latest record)\b/.test(lower)) return { intent: "clinical_records", mode: "record" };
   if (/\b(appointment|appointments|doctor visit|next visit)\b/.test(lower)) return { intent: "appointments", mode: "record" };
   if (/\b(alert|alerts|warning|warnings|care note|shared note)\b/.test(lower)) return { intent: "alerts", mode: "record" };
@@ -996,7 +1061,7 @@ function deterministicRecordAnswer(context, intent) {
       : `No medications are recorded in HealthSync for ${patient.name}.`;
     return deterministicAiResult(answer, context, ["MEDICATIONS", "MEDICATION_LOGS"]);
   }
-  if (intent === "adherence") return deterministicAiResult(`${patient.name}'s recorded adherence is ${adherence.rate}%: ${adherence.taken} taken, ${adherence.missed} missed, and ${adherence.pending} pending across ${adherence.totalLogs} medication logs.`, context, ["MEDICATION_LOGS"]);
+  if (intent === "adherence") return deterministicAiResult(buildGroundedAdherenceAnswer(context), context, ["MEDICATIONS", "MEDICATION_LOGS"]);
   if (intent === "vitals") {
     const latest = context.vitals[0];
     const answer = latest ? `Latest recorded vitals for ${patient.name} (${new Date(latest.recordedAt).toLocaleString()}): heart rate ${latest.heartRate ?? "not recorded"} bpm, blood pressure ${latest.systolic ?? "—"}/${latest.diastolic ?? "—"}, and glucose ${latest.glucose ?? "not recorded"}. These are recorded values, not a diagnosis.` : `No vital readings are recorded in HealthSync for ${patient.name}.`;
@@ -1242,9 +1307,32 @@ app.post("/api/medications/:id/take", auth, async (req, res) => {
     const medication = await prisma.medication.findFirst({ where: { id, userId: Number(req.user.id) } });
     if (!medication) return res.status(404).json({ message: "Medication not found." });
     const now = new Date();
-    const log = await prisma.medicationLog.create({ data: { medicationId: medication.id, userId: medication.userId, status: "TAKEN", scheduledAt: now, takenAt: now } });
-    let updatedMedication = medication;
-    if (medication.stock > 0) updatedMedication = await prisma.medication.update({ where: { id: medication.id }, data: { stock: { decrement: 1 } } });
+    const { start, end } = localDayBounds(now);
+    const medicationCreatedMinute = new Date(medication.createdAt);
+    medicationCreatedMinute.setSeconds(0, 0);
+    const occurrences = scheduleOccurrencesForDay(medication.schedule, now).filter(occurrence => occurrence.getTime() >= medicationCreatedMinute.getTime());
+    const occurrenceLogs = occurrences.length
+      ? await prisma.medicationLog.findMany({ where: { medicationId: medication.id, scheduledAt: { gte: start, lt: end } }, select: { scheduledAt: true } })
+      : [];
+    const completed = new Set(occurrenceLogs.map(item => item.scheduledAt.getTime()));
+    const available = occurrences.filter(occurrence => !completed.has(occurrence.getTime()));
+    const past = available.filter(occurrence => occurrence.getTime() <= now.getTime());
+    const scheduledAt = past.at(-1) || available.find(occurrence => occurrence.getTime() > now.getTime()) || now;
+    const lockKey = Math.floor(scheduledAt.getTime() / 60_000);
+    const result = await prisma.$transaction(async tx => {
+      if (occurrences.length) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${medication.id}, ${lockKey})`;
+        const existing = await tx.medicationLog.findFirst({ where: { medicationId: medication.id, scheduledAt } });
+        if (existing) return { conflict: existing };
+      }
+      const log = await tx.medicationLog.create({ data: { medicationId: medication.id, userId: medication.userId, status: "TAKEN", scheduledAt, takenAt: now } });
+      const updatedMedication = medication.stock > 0
+        ? await tx.medication.update({ where: { id: medication.id }, data: { stock: { decrement: 1 } } })
+        : medication;
+      return { log, updatedMedication };
+    });
+    if (result.conflict) return res.status(409).json({ message: "This scheduled dose has already been completed." });
+    const { log, updatedMedication } = result;
     const connections = await prisma.careConnection.findMany({ where: { patientId: Number(req.user.id) }, select: { caregiverId: true, physicianId: true } });
     const recipients = [...new Set(connections.flatMap(c => [c.caregiverId, c.physicianId]).filter(Boolean))];
     for (const recipient of recipients) emitToUser(recipient, "medication:updated", { patientId: Number(req.user.id), medicationId: medication.id, log, medication: updatedMedication });
@@ -1667,4 +1755,9 @@ app.use((error, _req, res, _next) => {
 
 httpServer.listen(PORT, () => {
   console.log(`HealthSync backend running on http://localhost:${PORT}`);
+  const reconcile = () => reconcileMissedMedicationDoses().catch(error => console.error("Medication reconciliation error:", error));
+  const startupReconciliation = setTimeout(reconcile, 1_000);
+  const reconciliationInterval = setInterval(reconcile, MEDICATION_RECONCILE_INTERVAL_MS);
+  startupReconciliation.unref();
+  reconciliationInterval.unref();
 });

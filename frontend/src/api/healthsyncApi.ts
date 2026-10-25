@@ -69,7 +69,7 @@ export function connectRealtime(onEvent: (event: string, payload: any) => void) 
   const token = localStorage.getItem("healthsync_token");
   if (!token) return () => undefined;
   socket = io(SOCKET_URL, { auth: { token } });
-  ["dose:updated", "alert:updated", "handoff:created", "appointment:created", "appointment:updated", "sos:updated", "emergency:created", "emergency:caregiver-acknowledged", "emergency:claimed", "emergency:resolved"].forEach(event => {
+  ["medication:updated", "alert:created", "alert:updated", "handoff:created", "appointment:created", "appointment:updated", "sos:updated", "emergency:created", "emergency:caregiver-acknowledged", "emergency:claimed", "emergency:resolved"].forEach(event => {
     socket?.on(event, payload => { onEvent(event, payload); window.dispatchEvent(new CustomEvent("healthsync:realtime", { detail: { event, payload } })); });
   });
   return () => socket?.disconnect();
