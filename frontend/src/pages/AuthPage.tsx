@@ -1,16 +1,16 @@
 /// <reference types="vite/client" />
 import { FormEvent, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, ChevronDown, Eye, EyeOff, HeartPulse, LockKeyhole, Mail, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowRight, ChevronDown, Eye, EyeOff, HandHeart, HeartPulse, LockKeyhole, Mail, ShieldCheck, Stethoscope, UserRound } from "lucide-react";
 import "./AuthPage.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 type AuthMode = "login" | "signup";
 
 const roleOptions = [
-  { value: "PATIENT", label: "Patient" },
-  { value: "CAREGIVER", label: "Caregiver" },
-  { value: "PHYSICIAN", label: "Physician" },
+  { value: "PATIENT", label: "Patient", description: "Manage your care", icon: UserRound, accent: "patient" },
+  { value: "CAREGIVER", label: "Caregiver", description: "Stay connected", icon: HandHeart, accent: "care" },
+  { value: "PHYSICIAN", label: "Doctor", description: "Coordinate treatment", icon: Stethoscope, accent: "clinical" },
 ] as const;
 
 export function AuthPage({ mode }: { mode: AuthMode }) {
@@ -74,29 +74,26 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             <span className="auth-brand__mark" aria-hidden="true"><HeartPulse /></span>
             <span className="auth-brand__copy"><strong>HealthSync</strong><span>Intelligent connected care</span></span>
           </button>
-          <div className="auth-switch">
-            {!isLogin && <span>Already have an account?</span>}
-            <Link to={isLogin ? `/signup?role=${role.toLowerCase()}` : `/login?role=${role.toLowerCase()}`}>
-              {isLogin ? "Create account" : "Log in"}<ArrowRight aria-hidden="true" />
-            </Link>
-          </div>
+          <span className="auth-header__note"><ShieldCheck aria-hidden="true" />Role-aware workspace access</span>
         </header>
 
         <main className={`auth-card ${isLogin ? "auth-card--login" : "auth-card--signup"}`}>
           <section className="auth-context" aria-labelledby="auth-context-title">
             <div>
-              <div className="auth-context__badge"><span aria-hidden="true" /><ShieldCheck aria-hidden="true" />Secure workspace</div>
+              <div className="auth-context__badge"><span aria-hidden="true" />Connected care workspace</div>
               <h1 id="auth-context-title">One health story.<span>Better connected.</span></h1>
               <p>Medication adherence, health signals and coordinated care — designed around the people who need to stay connected.</p>
             </div>
             <div className="auth-roles" aria-label="HealthSync workspace roles">
               {roleOptions.map((option, index) => (
-                <button key={option.value} type="button" className={role === option.value ? "is-active" : ""} onClick={() => setRole(option.value)} aria-pressed={role === option.value}>
-                  <span>0{index + 1}</span><strong>{option.label}</strong>
+                <button key={option.value} type="button" data-accent={option.accent} className={role === option.value ? "is-active" : ""} onClick={() => setRole(option.value)} aria-pressed={role === option.value}>
+                  <span className="auth-roles__icon" aria-hidden="true"><option.icon /></span>
+                  <span className="auth-roles__copy"><strong>{option.label}</strong><small>{option.description}</small></span>
+                  <span className="auth-roles__index" aria-hidden="true">0{index + 1}</span>
                 </button>
               ))}
             </div>
-            <div className="auth-context__assurance"><LockKeyhole aria-hidden="true" /><span><strong>Private by design</strong>Role-aware access keeps each workspace focused.</span></div>
+            <div className="auth-context__assurance"><LockKeyhole aria-hidden="true" /><span>Role-aware access keeps your care workspace private.</span></div>
           </section>
 
           <section className="auth-form-panel">
@@ -105,6 +102,12 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 <p>HealthSync access</p>
                 <h2>{isLogin ? "Welcome back" : "Create your account"}</h2>
                 <span>{isLogin ? "Sign in to continue to your connected care workspace." : "Create your secure, role-aware connected care workspace."}</span>
+                <div className="auth-switch">
+                  <span>{isLogin ? "New to HealthSync?" : "Already have an account?"}</span>
+                  <Link to={isLogin ? `/signup?role=${role.toLowerCase()}` : `/login?role=${role.toLowerCase()}`}>
+                    {isLogin ? "Create account" : "Log in"}<ArrowRight aria-hidden="true" />
+                  </Link>
+                </div>
               </div>
 
               <form onSubmit={handleSubmit} className="auth-form">
