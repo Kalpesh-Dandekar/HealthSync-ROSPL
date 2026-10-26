@@ -1260,7 +1260,7 @@ app.get("/api/medications", auth, async (req, res) => {
   try {
     const medications = await prisma.medication.findMany({
       where: { userId: Number(req.user.id) },
-      include: { logs: { orderBy: { scheduledAt: "desc" }, take: 10 } },
+      include: { logs: { orderBy: { scheduledAt: "desc" } } },
       orderBy: { createdAt: "desc" },
     });
     res.json({ medications });

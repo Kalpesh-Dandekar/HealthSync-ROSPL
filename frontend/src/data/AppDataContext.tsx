@@ -86,6 +86,17 @@ const AppDataContext =
 
 function toMedicine(r: MedicationRecord): Medicine {
   const log = r.logs?.[0];
+  const doseHistory = (r.logs || []).map((item) => ({
+    id: `log-${item.id}`,
+    time: new Date(item.scheduledAt).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    status: item.status === "TAKEN" ? "taken" as const : item.status === "MISSED" ? "missed" as const : "pending" as const,
+    takenAt: item.takenAt
+      ? new Date(item.takenAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : undefined,
+  }));
 
   const status = log
     ? log.status === "TAKEN"
@@ -103,6 +114,7 @@ function toMedicine(r: MedicationRecord): Medicine {
     compartment: r.schedule,
     stock: r.stock,
     lowStockThreshold: 6,
+    doseHistory,
 
     doses: [
       {
@@ -725,16 +737,9 @@ export function AppDataProvider({
         : 0;
     }
 
-    return medicines.length
-      ? Math.round(
-          (medicines.filter(
-            (medicine) =>
-              medicine.doses[0]?.status ===
-              "taken"
-          ).length /
-            medicines.length) *
-            100
-        )
+    const completed = medicines.flatMap((medicine) => medicine.doseHistory || []).filter((dose) => dose.status !== "pending");
+    return completed.length
+      ? Math.round((completed.filter((dose) => dose.status === "taken").length / completed.length) * 100)
       : 0;
   }, [medicines, role]);
 

@@ -16,6 +16,7 @@ export interface Medicine {
   stock: number;
   lowStockThreshold: number;
   doses: DoseEvent[];
+  doseHistory?: DoseEvent[];
 }
 
 export interface VitalReading {

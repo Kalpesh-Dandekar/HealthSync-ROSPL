@@ -89,8 +89,9 @@ async function seedDemo() {
       tx.medication.create({ data: { userId: users.aarav.id, name: "Pantoprazole", dosage: "40 mg", schedule: "07:30 daily", stock: 19, createdAt } }),
     ]);
     const [metformin, amlodipine, vitaminD3, atorvastatin, pantoprazole] = aaravMeds;
-    const schedule = [[pantoprazole, 7, 30], [metformin, 8, 0], [amlodipine, 8, 0], [vitaminD3, 9, 0], [metformin, 20, 0], [atorvastatin, 21, 0]], logs = [];
-    for (let day = -7; day <= -1; day++) for (const [medication, hour, minute] of schedule) { const scheduledAt = localDate(day, hour, minute), missed = (day === -5 && medication.id === metformin.id && hour === 20) || (day === -3 && medication.id === atorvastatin.id); logs.push({ medicationId: medication.id, userId: users.aarav.id, status: missed ? "MISSED" : "TAKEN", scheduledAt, takenAt: missed ? null : new Date(scheduledAt.getTime() + 10 * 60000) }); }
+    const dailySchedule = [[pantoprazole, 7, 30], [amlodipine, 8, 0], [vitaminD3, 9, 0], [atorvastatin, 21, 0]], logs = [];
+    for (let day = -8; day <= -1; day++) for (const [medication, hour, minute] of dailySchedule) { const scheduledAt = localDate(day, hour, minute), missed = day === -3 && medication.id === atorvastatin.id; logs.push({ medicationId: medication.id, userId: users.aarav.id, status: missed ? "MISSED" : "TAKEN", scheduledAt, takenAt: missed ? null : new Date(scheduledAt.getTime() + 10 * 60000) }); }
+    for (let day = -5; day <= -1; day++) for (const hour of [8, 20]) { const scheduledAt = localDate(day, hour), missed = day === -5 && hour === 20; logs.push({ medicationId: metformin.id, userId: users.aarav.id, status: missed ? "MISSED" : "TAKEN", scheduledAt, takenAt: missed ? null : new Date(scheduledAt.getTime() + 10 * 60000) }); }
     await tx.medicationLog.createMany({ data: logs });
 
     const riyaMeds = await Promise.all([
@@ -128,6 +129,22 @@ async function seedDemo() {
       {userId:users.riya.id,type:"handoff_note",message:JSON.stringify({author:"Riya",authorRole:"patient",note:"Evening medication and home readings are following the planned routine."}),severity:"INFO",read:true,createdAt:localDate(-2,20,30)},
       {userId:users.riya.id,type:"care_observation",message:JSON.stringify({author:"Karan",authorRole:"caregiver",note:"Riya has maintained a consistent home monitoring schedule."}),severity:"INFO",read:true,createdAt:localDate(-1,9)},
     ] });
+
+    const emergencyCreatedAt = localDate(-9, 18, 10);
+    const resolvedEmergency = await tx.emergency.create({ data: {
+      patientId: users.aarav.id,
+      triggeredById: users.aarav.id,
+      triggeredByRole: "PATIENT",
+      status: "RESOLVED",
+      respondingPhysicianId: users.neha.id,
+      acknowledgedAt: new Date(emergencyCreatedAt.getTime() + 4 * 60_000),
+      resolvedById: users.neha.id,
+      resolvedAt: new Date(emergencyCreatedAt.getTime() + 45 * 60_000),
+      resolutionNote: "Patient was contacted, the situation was reviewed, and the emergency was safely resolved with follow-up guidance.",
+      activePatientKey: null,
+      createdAt: emergencyCreatedAt,
+    } });
+    await tx.emergencyCaregiverAcknowledgement.create({ data: { emergencyId: resolvedEmergency.id, caregiverId: users.meera.id, acknowledgedAt: new Date(emergencyCreatedAt.getTime() + 8 * 60_000) } });
   });
 
   const afterProtected = await prisma.user.findMany({ where: { email: { notIn: demoEmails } }, select: protectedSelect, orderBy: { id: "asc" } });
@@ -141,17 +158,18 @@ async function seedDemo() {
   if (actual.size !== expected.size || [...expected].some(key => !actual.has(key))) throw new Error("Demo care-circle verification failed.");
   const medications = await prisma.medication.findMany({ where: { userId: users.aarav.id }, select: { name: true, createdAt: true } }), names = ["Amlodipine","Atorvastatin","Metformin","Pantoprazole","Vitamin D3"];
   if (JSON.stringify(medications.map(item=>item.name).sort()) !== JSON.stringify(names) || medications.some(item=>item.createdAt >= localDate(0))) throw new Error("Aarav medication baseline is incorrect or not reconciliation-safe.");
-  const [taken,missed,pending,vitals,records,appointments,missedAlerts,unread,emergencies,invites,requests] = await Promise.all([
-    prisma.medicationLog.count({where:{userId:users.aarav.id,status:"TAKEN"}}), prisma.medicationLog.count({where:{userId:users.aarav.id,status:"MISSED"}}), prisma.medicationLog.count({where:{userId:users.aarav.id,status:"PENDING"}}), prisma.vital.count({where:{userId:users.aarav.id}}), prisma.clinicalRecord.count({where:{patientId:users.aarav.id}}), prisma.appointment.count({where:{userId:users.aarav.id}}), prisma.alert.count({where:{userId:users.aarav.id,type:"missed_dose"}}), prisma.alert.count({where:{userId:{in:patientIds},read:false}}), prisma.emergency.count({where:{patientId:{in:patientIds}}}), prisma.caregiverInvite.count({where:{patientId:{in:patientIds},active:true,consumedAt:null}}), prisma.physicianConnectionRequest.count({where:{patientId:{in:patientIds},status:"PENDING"}}),
+  const [taken,missed,pending,vitals,records,appointments,missedAlerts,unread,resolvedEmergencies,activeEmergencies,acknowledgedEmergencies,invites,requests] = await Promise.all([
+    prisma.medicationLog.count({where:{userId:users.aarav.id,status:"TAKEN"}}), prisma.medicationLog.count({where:{userId:users.aarav.id,status:"MISSED"}}), prisma.medicationLog.count({where:{userId:users.aarav.id,status:"PENDING"}}), prisma.vital.count({where:{userId:users.aarav.id}}), prisma.clinicalRecord.count({where:{patientId:users.aarav.id}}), prisma.appointment.count({where:{userId:users.aarav.id}}), prisma.alert.count({where:{userId:users.aarav.id,type:"missed_dose"}}), prisma.alert.count({where:{userId:{in:patientIds},read:false}}), prisma.emergency.count({where:{patientId:users.aarav.id,status:"RESOLVED",respondingPhysicianId:users.neha.id,resolvedById:users.neha.id,activePatientKey:null}}), prisma.emergency.count({where:{patientId:{in:patientIds},status:"ACTIVE"}}), prisma.emergency.count({where:{patientId:{in:patientIds},status:"ACKNOWLEDGED"}}), prisma.caregiverInvite.count({where:{patientId:{in:patientIds},active:true,consumedAt:null}}), prisma.physicianConnectionRequest.count({where:{patientId:{in:patientIds},status:"PENDING"}}),
   ]);
   if (taken !== 40 || missed !== 2 || pending || missedAlerts !== 2) throw new Error("Aarav adherence baseline is incorrect.");
   if (vitals !== 7 || records !== 4 || appointments !== 2) throw new Error("Aarav presentation data is incomplete.");
-  if (unread || emergencies || invites || requests) throw new Error("Demo dynamic-state baseline is not clean.");
+  if (resolvedEmergencies !== 1 || activeEmergencies || acknowledgedEmergencies || unread || invites || requests) throw new Error("Demo dynamic-state baseline is not clean.");
   console.log("HealthSync presentation demo ready.");
   console.log(`Aarav: 5 medications, 42 completed dose logs (${Math.round(taken / (taken + missed) * 100)}% adherence; 2 historical missed), 7 vitals, 4 clinical records, 2 appointments.`);
   console.log("Care Circle A: Aarav connected to Neha; Meera intentionally disconnected; no caregiver invite exists.");
   console.log("Care Circle B: Riya connected to Arjun and Karan.");
-  console.log("Dynamic state: no unread alerts, pending requests, unused invites, or active emergencies.");
+  console.log("Emergency history: 1 resolved Aarav emergency handled by Neha; 0 active or acknowledged emergencies.");
+  console.log("Dynamic state: no unread alerts, pending requests, or unused invites.");
 }
 
 try { if (process.argv.includes("--clean")) await cleanDemo(); else await seedDemo(); }

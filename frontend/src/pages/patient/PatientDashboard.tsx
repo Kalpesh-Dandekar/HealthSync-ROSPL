@@ -38,8 +38,8 @@ export function PatientDashboard() {
   const riskPercent = Math.round(riskAssessment.overall.score * 100);
   const topRisk = [...riskAssessment.perMedicine].sort((a, b) => b.risk.score - a.risk.score)[0];
   const activeAlerts = alerts.filter((alert) => !alert.acknowledged);
-  const missed = medicines.reduce((count, medicine) => count + medicine.doses.filter((dose) => dose.status === "missed").length, 0);
-  const pending = medicines.reduce((count, medicine) => count + medicine.doses.filter((dose) => dose.status === "pending").length, 0);
+  const missed = medicines.reduce((count, medicine) => count + (medicine.doseHistory || []).filter((dose) => dose.status === "missed").length, 0);
+  const pending = medicines.reduce((count, medicine) => count + (medicine.doseHistory || []).filter((dose) => dose.status === "pending").length, 0);
   const lowStock = medicines.filter((medicine) => medicine.stock <= medicine.lowStockThreshold).length;
 
   return (
